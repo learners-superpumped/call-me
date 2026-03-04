@@ -12,7 +12,7 @@ export class CallioPhoneProvider implements PhoneProvider {
   readonly name = 'callio';
   private accountId: string | null = null;
   private authToken: string | null = null;
-  private baseUrl: string = process.env.CALLME_CALLIO_BASE_URL || 'https://sip.clawops.io:3000';
+  private baseUrl: string = process.env.CALLME_CALLIO_BASE_URL || 'https://api.claw-ops.com';
 
   initialize(config: PhoneConfig): void {
     this.accountId = config.accountSid;

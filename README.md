@@ -48,7 +48,7 @@ CALLME_PHONE_ACCOUNT_SID=<Account ID>        # e.g. ACxxxxxxxxxxxxxxxx
 CALLME_PHONE_AUTH_TOKEN=<Auth Token>
 CALLME_PHONE_NUMBER=<Provisioned number>     # E.164 format, e.g. +821012345678
 CALLME_USER_PHONE_NUMBER=<SIP extension>     # SIP username registered to Asterisk
-CALLME_CALLIO_BASE_URL=https://sip.clawops.io:3000  # Callio API base URL (default)
+CALLME_CALLIO_BASE_URL=https://api.claw-ops.com  # Callio API base URL (default)
 ```
 
 </details>
@@ -104,7 +104,7 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
     "CALLME_PHONE_AUTH_TOKEN": "your-auth-token",
     "CALLME_PHONE_NUMBER": "+821012345678",
     "CALLME_USER_PHONE_NUMBER": "softphone",
-    "CALLME_CALLIO_BASE_URL": "https://sip.clawops.io:3000",
+    "CALLME_CALLIO_BASE_URL": "https://api.claw-ops.com",
     "CALLME_OPENAI_API_KEY": "sk-...",
     "CALLME_NGROK_AUTHTOKEN": "your-ngrok-token"
   }
@@ -142,7 +142,7 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `CALLME_CALLIO_BASE_URL` | `https://sip.clawops.io:3000` | Callio API base URL (Callio only) |
+| `CALLME_CALLIO_BASE_URL` | `https://api.claw-ops.com` | Callio API base URL (Callio only) |
 | `CALLME_TTS_VOICE` | `onyx` | OpenAI voice: alloy, echo, fable, onyx, nova, shimmer |
 | `CALLME_PORT` | `3333` | Local HTTP server port |
 | `CALLME_NGROK_DOMAIN` | - | Custom ngrok domain (paid feature) |
