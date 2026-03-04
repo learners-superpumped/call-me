@@ -8,12 +8,13 @@
 import type { PhoneProvider, TTSProvider, RealtimeSTTProvider, ProviderRegistry } from './types.js';
 import { TelnyxPhoneProvider } from './phone-telnyx.js';
 import { TwilioPhoneProvider } from './phone-twilio.js';
+import { CallioPhoneProvider } from './phone-callio.js';
 import { OpenAITTSProvider } from './tts-openai.js';
 import { OpenAIRealtimeSTTProvider } from './stt-openai-realtime.js';
 
 export * from './types.js';
 
-export type PhoneProviderType = 'telnyx' | 'twilio';
+export type PhoneProviderType = 'telnyx' | 'twilio' | 'callio';
 
 export interface ProviderConfig {
   // Phone provider selection
@@ -63,6 +64,8 @@ export function createPhoneProvider(config: ProviderConfig): PhoneProvider {
 
   if (config.phoneProvider === 'twilio') {
     provider = new TwilioPhoneProvider();
+  } else if (config.phoneProvider === 'callio') {
+    provider = new CallioPhoneProvider();
   } else {
     provider = new TelnyxPhoneProvider();
   }
@@ -112,6 +115,8 @@ export function validateProviderConfig(config: ProviderConfig): string[] {
   // Provider-specific credential descriptions
   const credentialDesc = config.phoneProvider === 'twilio'
     ? { accountSid: 'Twilio Account SID', authToken: 'Twilio Auth Token' }
+    : config.phoneProvider === 'callio'
+    ? { accountSid: 'Callio Account ID (AC...)', authToken: 'Callio Auth Token' }
     : { accountSid: 'Telnyx Connection ID', authToken: 'Telnyx API Key' };
 
   if (!config.phoneAccountSid) {

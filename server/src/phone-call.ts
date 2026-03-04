@@ -171,9 +171,11 @@ export class CallManager {
             const msgState = this.activeCalls.get(callId);
 
             // Capture streamSid from "start" event (required for sending audio back)
-            if (msg.event === 'start' && msg.streamSid && msgState) {
-              msgState.streamSid = msg.streamSid;
-              console.error(`[${callId}] Captured streamSid: ${msg.streamSid}`);
+            // Support both Twilio (streamSid) and Callio (start.streamId / start.streamSid)
+            const capturedStreamSid = msg.streamSid || msg.start?.streamSid || msg.start?.streamId;
+            if (msg.event === 'start' && capturedStreamSid && msgState) {
+              msgState.streamSid = capturedStreamSid;
+              console.error(`[${callId}] Captured streamSid: ${capturedStreamSid}`);
             }
 
             // Handle "stop" event when call ends
@@ -273,9 +275,12 @@ export class CallManager {
         try {
           const params = new URLSearchParams(body);
 
-          // Validate Twilio signature
+          // Validate webhook signature (Twilio: x-twilio-signature, Callio: x-signature)
           const authToken = this.config.providerConfig.phoneAuthToken;
-          const signature = req.headers['x-twilio-signature'] as string | undefined;
+          const isCallio = this.config.providerConfig.phoneProvider === 'callio';
+          const signature = isCallio
+            ? req.headers['x-signature'] as string | undefined
+            : req.headers['x-twilio-signature'] as string | undefined;
           // Use the known public URL directly - reconstructing from headers fails with ngrok
           // because ngrok doesn't preserve headers exactly as Twilio sends them
           const webhookUrl = `${this.config.publicUrl}/twiml`;
@@ -285,9 +290,9 @@ export class CallManager {
             if (isNgrokFreeTier) {
               // Only log if ngrok free tier is used
               // Log for debugging but proceed anyway - ngrok free tier causes signature mismatches
-              console.error('[Security] Twilio signature validation failed (proceeding anyway for ngrok compatibility)');
+              console.error('[Security] Webhook signature validation failed (proceeding anyway for ngrok compatibility)');
             } else {
-              console.error('[Security] Rejecting Twilio webhook: invalid signature');
+              console.error(`[Security] Rejecting ${isCallio ? 'Callio' : 'Twilio'} webhook: invalid signature`);
               res.writeHead(401);
               res.end('Invalid signature');
               return;
@@ -311,10 +316,11 @@ export class CallManager {
   }
 
   private async handleTwilioWebhook(params: URLSearchParams, res: ServerResponse): Promise<void> {
-    const callSid = params.get('CallSid');
+    // Support both Twilio (CallSid) and Callio (CallId) field names
+    const callSid = params.get('CallSid') || params.get('CallId');
     const callStatus = params.get('CallStatus');
 
-    console.error(`Twilio webhook: CallSid=${callSid}, CallStatus=${callStatus}`);
+    console.error(`Phone webhook: CallSid=${callSid}, CallStatus=${callStatus}`);
 
     // Handle call status updates
     if (callStatus === 'completed' || callStatus === 'busy' || callStatus === 'no-answer' || callStatus === 'failed') {
