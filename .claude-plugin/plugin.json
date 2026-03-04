@@ -1,12 +1,12 @@
 {
   "name": "callme",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "description": "Claude calls you on the phone when it needs your input or wants to report progress",
   "author": {
-    "name": "ZeframLou",
-    "url": "https://github.com/ZeframLou"
+    "name": "learners-superpumped",
+    "url": "https://github.com/learners-superpumped"
   },
-  "repository": "https://github.com/ZeframLou/call-me",
+  "repository": "https://github.com/learners-superpumped/call-me",
   "license": "MIT",
   "keywords": ["phone", "voice", "calls", "input"],
   "skills": "./skills",
@@ -15,10 +15,12 @@
       "command": "bun",
       "args": ["run", "--cwd", "${CLAUDE_PLUGIN_ROOT}/server", "start"],
       "env": {
+        "CALLME_PHONE_PROVIDER": "${CALLME_PHONE_PROVIDER:-telnyx}",
         "CALLME_PHONE_ACCOUNT_SID": "${CALLME_PHONE_ACCOUNT_SID}",
         "CALLME_PHONE_AUTH_TOKEN": "${CALLME_PHONE_AUTH_TOKEN}",
         "CALLME_PHONE_NUMBER": "${CALLME_PHONE_NUMBER}",
         "CALLME_USER_PHONE_NUMBER": "${CALLME_USER_PHONE_NUMBER}",
+        "CALLME_CALLIO_BASE_URL": "${CALLME_CALLIO_BASE_URL:-https://api.claw-ops.com}",
         "CALLME_OPENAI_API_KEY": "${CALLME_OPENAI_API_KEY}",
         "CALLME_TTS_VOICE": "${CALLME_TTS_VOICE:-onyx}",
         "CALLME_NGROK_AUTHTOKEN": "${CALLME_NGROK_AUTHTOKEN}",
