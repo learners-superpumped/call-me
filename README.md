@@ -18,7 +18,7 @@ Start a task, walk away. Your phone/watch rings when Claude is done, stuck, or n
 ### 1. Get Required Accounts
 
 You'll need:
-- **Phone provider**: [Telnyx](https://telnyx.com) or [Twilio](https://twilio.com)
+- **Phone provider**: [Callio](https://github.com/learners-superpumped/callio) (self-hosted), [Telnyx](https://telnyx.com), or [Twilio](https://twilio.com)
 - **OpenAI API key**: For speech-to-text and text-to-speech
 - **ngrok account**: Free at [ngrok.com](https://ngrok.com) (for webhook tunneling)
 
@@ -27,7 +27,34 @@ You'll need:
 Choose **one** of the following:
 
 <details>
-<summary><b>Option A: Telnyx (Recommended - 50% cheaper)</b></summary>
+<summary><b>Option A: Callio (Self-hosted CPaaS — no per-minute cost)</b></summary>
+
+[Callio](https://github.com/learners-superpumped/callio) is a self-hosted Asterisk-based CPaaS that provides a Twilio-compatible Voice API. Use this if you have your own SIP trunk (e.g. KT Business).
+
+**Prerequisites**: A running Callio instance. See the [Callio README](https://github.com/learners-superpumped/callio) for setup.
+
+**Steps:**
+1. Log in to the Callio web dashboard
+2. Copy your **Account ID** and **Auth Token** from the account settings page
+3. Provision a phone number via the dashboard (`Numbers` → `Provision Number`)
+   - The provisioned number is used as `CALLME_PHONE_NUMBER`
+4. Register your SIP softphone (e.g. Linphone) using the SIP credentials shown after provisioning
+   - The softphone extension is used as `CALLME_USER_PHONE_NUMBER`
+
+**Environment variables for Callio:**
+```bash
+CALLME_PHONE_PROVIDER=callio
+CALLME_PHONE_ACCOUNT_SID=<Account ID>        # e.g. ACxxxxxxxxxxxxxxxx
+CALLME_PHONE_AUTH_TOKEN=<Auth Token>
+CALLME_PHONE_NUMBER=<Provisioned number>     # E.164 format, e.g. +821012345678
+CALLME_USER_PHONE_NUMBER=<SIP extension>     # SIP username registered to Asterisk
+CALLME_CALLIO_BASE_URL=https://sip.clawops.io:3000  # Callio API base URL (default)
+```
+
+</details>
+
+<details>
+<summary><b>Option B: Telnyx (50% cheaper than Twilio)</b></summary>
 
 1. Create account at [portal.telnyx.com](https://portal.telnyx.com) and verify your identity
 2. [Buy a phone number](https://portal.telnyx.com/#/numbers/buy-numbers) (~$1/month)
@@ -49,7 +76,7 @@ CALLME_TELNYX_PUBLIC_KEY=<Public Key>  # Optional: enables webhook security
 </details>
 
 <details>
-<summary><b>Option B: Twilio (Not recommended - need to buy $20 of credits just to start and more expensive overall)</b></summary>
+<summary><b>Option C: Twilio</b></summary>
 
 1. Create account at [twilio.com/console](https://www.twilio.com/console)
 2. Use the free number your account comes with or [buy a new phone number](https://www.twilio.com/console/phone-numbers/incoming) (~$1.15/month)
@@ -66,14 +93,31 @@ CALLME_PHONE_AUTH_TOKEN=<Auth Token>
 
 ### 3. Set Environment Variables
 
-Add these to `~/.claude/settings.json` (recommended) or export them in your shell:
+Add these to `~/.claude/settings.json` (recommended) or export them in your shell.
 
+**Example: Callio**
+```json
+{
+  "env": {
+    "CALLME_PHONE_PROVIDER": "callio",
+    "CALLME_PHONE_ACCOUNT_SID": "ACxxxxxxxxxxxxxxxx",
+    "CALLME_PHONE_AUTH_TOKEN": "your-auth-token",
+    "CALLME_PHONE_NUMBER": "+821012345678",
+    "CALLME_USER_PHONE_NUMBER": "softphone",
+    "CALLME_CALLIO_BASE_URL": "https://sip.clawops.io:3000",
+    "CALLME_OPENAI_API_KEY": "sk-...",
+    "CALLME_NGROK_AUTHTOKEN": "your-ngrok-token"
+  }
+}
+```
+
+**Example: Telnyx**
 ```json
 {
   "env": {
     "CALLME_PHONE_PROVIDER": "telnyx",
-    "CALLME_PHONE_ACCOUNT_SID": "your-connection-id-or-account-sid",
-    "CALLME_PHONE_AUTH_TOKEN": "your-api-key-or-auth-token",
+    "CALLME_PHONE_ACCOUNT_SID": "your-connection-id",
+    "CALLME_PHONE_AUTH_TOKEN": "your-api-key",
     "CALLME_PHONE_NUMBER": "+15551234567",
     "CALLME_USER_PHONE_NUMBER": "+15559876543",
     "CALLME_OPENAI_API_KEY": "sk-...",
@@ -86,11 +130,11 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
 
 | Variable | Description |
 |----------|-------------|
-| `CALLME_PHONE_PROVIDER` | `telnyx` (default) or `twilio` |
-| `CALLME_PHONE_ACCOUNT_SID` | Telnyx Connection ID or Twilio Account SID |
-| `CALLME_PHONE_AUTH_TOKEN` | Telnyx API Key or Twilio Auth Token |
+| `CALLME_PHONE_PROVIDER` | `callio`, `telnyx` (default), or `twilio` |
+| `CALLME_PHONE_ACCOUNT_SID` | Callio Account ID / Telnyx Connection ID / Twilio Account SID |
+| `CALLME_PHONE_AUTH_TOKEN` | Callio Auth Token / Telnyx API Key / Twilio Auth Token |
 | `CALLME_PHONE_NUMBER` | Phone number Claude calls from (E.164 format) |
-| `CALLME_USER_PHONE_NUMBER` | Your phone number to receive calls |
+| `CALLME_USER_PHONE_NUMBER` | Your phone number or SIP extension to receive calls |
 | `CALLME_OPENAI_API_KEY` | OpenAI API key (for TTS and realtime STT) |
 | `CALLME_NGROK_AUTHTOKEN` | ngrok auth token for webhook tunneling |
 
@@ -98,6 +142,7 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
 
 | Variable | Default | Description |
 |----------|---------|-------------|
+| `CALLME_CALLIO_BASE_URL` | `https://sip.clawops.io:3000` | Callio API base URL (Callio only) |
 | `CALLME_TTS_VOICE` | `onyx` | OpenAI voice: alloy, echo, fable, onyx, nova, shimmer |
 | `CALLME_PORT` | `3333` | Local HTTP server port |
 | `CALLME_NGROK_DOMAIN` | - | Custom ngrok domain (paid feature) |
@@ -108,8 +153,8 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
 ### 4. Install Plugin
 
 ```bash
-/plugin marketplace add ZeframLou/call-me
-/plugin install callme@callme
+/plugin marketplace add learners-superpumped/call-me
+/plugin install callme@phone-input
 ```
 
 Restart Claude Code. Done!
@@ -128,7 +173,8 @@ Plugin ────stdio──────────────────�
                                          ├─► ngrok tunnel
                                          │
                                          ▼
-                                   Phone Provider (Telnyx/Twilio)
+                                   Phone Provider
+                                   (Callio / Telnyx / Twilio)
                                          │
                                          ▼
                                    Your Phone rings
@@ -192,16 +238,16 @@ await end_call({
 
 ## Costs
 
-| Service | Telnyx | Twilio |
-|---------|--------|--------|
-| Outbound calls | ~$0.007/min | ~$0.014/min |
-| Phone number | ~$1/month | ~$1.15/month |
+| Service | Callio (self-hosted) | Telnyx | Twilio |
+|---------|----------------------|--------|--------|
+| Outbound calls | SIP trunk cost only | ~$0.007/min | ~$0.014/min |
+| Phone number | Provisioned via Callio | ~$1/month | ~$1.15/month |
 
-Plus OpenAI costs (same for both providers):
-- **Speech-to-text**: ~$0.006/min (Whisper)
+Plus OpenAI costs (same for all providers):
+- **Speech-to-text**: ~$0.006/min (Realtime STT)
 - **Text-to-speech**: ~$0.02/min (TTS)
 
-**Total**: ~$0.03-0.04/minute of conversation
+**Total**: Callio ~$0.02/min | Telnyx ~$0.03/min | Twilio ~$0.04/min
 
 ---
 
