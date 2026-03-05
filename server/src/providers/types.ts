@@ -76,7 +76,7 @@ export interface RealtimeSTTSession {
 
   /**
    * Send audio data to the transcription session
-   * @param audio mu-law audio buffer (8kHz mono)
+   * @param audio PCM16 audio buffer (24kHz mono)
    */
   sendAudio(audio: Buffer): void;
 

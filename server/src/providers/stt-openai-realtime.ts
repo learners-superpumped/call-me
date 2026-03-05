@@ -2,7 +2,7 @@
  * OpenAI Realtime STT Provider
  *
  * Uses the OpenAI Realtime API for streaming transcription with:
- * - Direct mu-law audio support (no conversion needed)
+ * - Direct PCM16 24kHz audio support (no conversion needed)
  * - Built-in server-side VAD for turn detection
  * - Low-latency streaming transcription
  */
@@ -79,7 +79,7 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
         this.sendEvent({
           type: 'transcription_session.update',
           session: {
-            input_audio_format: 'g711_ulaw',
+            input_audio_format: 'pcm16',
             input_audio_transcription: {
               model: this.model,
               language: 'ko',
@@ -206,12 +206,12 @@ class OpenAIRealtimeSTTSession implements RealtimeSTTSession {
     }
   }
 
-  sendAudio(muLawData: Buffer): void {
+  sendAudio(pcmData: Buffer): void {
     if (!this.connected) return;
 
     this.sendEvent({
       type: 'input_audio_buffer.append',
-      audio: muLawData.toString('base64'),
+      audio: pcmData.toString('base64'),
     });
   }
 
