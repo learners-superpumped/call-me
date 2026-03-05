@@ -1,6 +1,6 @@
 {
   "name": "callme",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Claude calls you on the phone when it needs your input or wants to report progress",
   "author": {
     "name": "learners-superpumped",
@@ -29,7 +29,13 @@
         "CALLME_PORT": "${CALLME_PORT:-3333}",
         "CALLME_CONTROL_PORT": "${CALLME_CONTROL_PORT:-3334}",
         "CALLME_TRANSCRIPT_TIMEOUT_MS": "${CALLME_TRANSCRIPT_TIMEOUT_MS:-180000}",
-        "CALLME_STT_SILENCE_DURATION_MS": "${CALLME_STT_SILENCE_DURATION_MS:-800}"
+        "CALLME_STT_SILENCE_DURATION_MS": "${CALLME_STT_SILENCE_DURATION_MS:-800}",
+        "CALLME_INBOUND_ENABLED": "${CALLME_INBOUND_ENABLED:-false}",
+        "CALLME_WORKSPACE_DIR": "${CALLME_WORKSPACE_DIR:-}",
+        "CALLME_INBOUND_WHITELIST": "${CALLME_INBOUND_WHITELIST:-}",
+        "CALLME_INBOUND_PERMISSION_MODE": "${CALLME_INBOUND_PERMISSION_MODE:-plan}",
+        "CALLME_INBOUND_MAX_CALLS": "${CALLME_INBOUND_MAX_CALLS:-1}",
+        "CALLME_INBOUND_GREETING": "${CALLME_INBOUND_GREETING:-안녕하세요. 잠시만 기다려주세요. 연결 중입니다.}"
       }
     }
   },
