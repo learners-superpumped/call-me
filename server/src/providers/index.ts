@@ -8,13 +8,13 @@
 import type { PhoneProvider, TTSProvider, RealtimeSTTProvider, ProviderRegistry } from './types.js';
 import { TelnyxPhoneProvider } from './phone-telnyx.js';
 import { TwilioPhoneProvider } from './phone-twilio.js';
-import { CallioPhoneProvider } from './phone-callio.js';
+import { ClawOpsPhoneProvider } from './phone-clawops.js';
 import { OpenAITTSProvider } from './tts-openai.js';
 import { OpenAIRealtimeSTTProvider } from './stt-openai-realtime.js';
 
 export * from './types.js';
 
-export type PhoneProviderType = 'telnyx' | 'twilio' | 'callio';
+export type PhoneProviderType = 'telnyx' | 'twilio' | 'clawops';
 
 export interface ProviderConfig {
   // Phone provider selection
@@ -23,9 +23,14 @@ export interface ProviderConfig {
   // Phone credentials (interpretation depends on provider)
   // Telnyx: accountSid = Connection ID, authToken = API Key
   // Twilio: accountSid = Account SID, authToken = Auth Token
+  // ClawOps: accountSid = Account ID, phoneApiKey = API Key (sk_...), phoneSigningKey = Signing Key
   phoneAccountSid: string;
   phoneAuthToken: string;
   phoneNumber: string;
+
+  // ClawOps-specific: separated API key and webhook signing key
+  phoneApiKey?: string;      // Bearer token for API calls (sk_...)
+  phoneSigningKey?: string;  // HMAC-SHA1 signing key for webhook verification
 
   // Telnyx webhook public key (for signature verification)
   // Get from: Mission Control > Account Settings > Keys & Credentials > Public Key
@@ -51,6 +56,8 @@ export function loadProviderConfig(): ProviderConfig {
     phoneAccountSid: process.env.CALLME_PHONE_ACCOUNT_SID || '',
     phoneAuthToken: process.env.CALLME_PHONE_AUTH_TOKEN || '',
     phoneNumber: process.env.CALLME_PHONE_NUMBER || '',
+    phoneApiKey: process.env.CALLME_PHONE_API_KEY,
+    phoneSigningKey: process.env.CALLME_PHONE_SIGNING_KEY,
     telnyxPublicKey: process.env.CALLME_TELNYX_PUBLIC_KEY,
     openaiApiKey: process.env.CALLME_OPENAI_API_KEY || '',
     ttsVoice: process.env.CALLME_TTS_VOICE || 'onyx',
@@ -64,8 +71,8 @@ export function createPhoneProvider(config: ProviderConfig): PhoneProvider {
 
   if (config.phoneProvider === 'twilio') {
     provider = new TwilioPhoneProvider();
-  } else if (config.phoneProvider === 'callio') {
-    provider = new CallioPhoneProvider();
+  } else if (config.phoneProvider === 'clawops') {
+    provider = new ClawOpsPhoneProvider();
   } else {
     provider = new TelnyxPhoneProvider();
   }
@@ -74,6 +81,8 @@ export function createPhoneProvider(config: ProviderConfig): PhoneProvider {
     accountSid: config.phoneAccountSid,
     authToken: config.phoneAuthToken,
     phoneNumber: config.phoneNumber,
+    apiKey: config.phoneApiKey,
+    signingKey: config.phoneSigningKey,
   });
 
   return provider;
@@ -115,14 +124,22 @@ export function validateProviderConfig(config: ProviderConfig): string[] {
   // Provider-specific credential descriptions
   const credentialDesc = config.phoneProvider === 'twilio'
     ? { accountSid: 'Twilio Account SID', authToken: 'Twilio Auth Token' }
-    : config.phoneProvider === 'callio'
-    ? { accountSid: 'Callio Account ID (AC...)', authToken: 'Callio Auth Token' }
+    : config.phoneProvider === 'clawops'
+    ? { accountSid: 'ClawOps Account ID (AC...)', authToken: 'ClawOps Auth Token' }
     : { accountSid: 'Telnyx Connection ID', authToken: 'Telnyx API Key' };
 
   if (!config.phoneAccountSid) {
     errors.push(`Missing CALLME_PHONE_ACCOUNT_SID (${credentialDesc.accountSid})`);
   }
-  if (!config.phoneAuthToken) {
+
+  if (config.phoneProvider === 'clawops') {
+    if (!config.phoneApiKey) {
+      errors.push('Missing CALLME_PHONE_API_KEY (ClawOps API Key, sk_...)');
+    }
+    if (!config.phoneSigningKey) {
+      errors.push('Missing CALLME_PHONE_SIGNING_KEY (ClawOps Webhook Signing Key)');
+    }
+  } else if (!config.phoneAuthToken) {
     errors.push(`Missing CALLME_PHONE_AUTH_TOKEN (${credentialDesc.authToken})`);
   }
   if (!config.phoneNumber) {

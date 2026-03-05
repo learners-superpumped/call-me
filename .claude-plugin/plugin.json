@@ -1,6 +1,6 @@
 {
   "name": "callme",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Claude calls you on the phone when it needs your input or wants to report progress",
   "author": {
     "name": "learners-superpumped",
@@ -18,9 +18,11 @@
         "CALLME_PHONE_PROVIDER": "${CALLME_PHONE_PROVIDER:-telnyx}",
         "CALLME_PHONE_ACCOUNT_SID": "${CALLME_PHONE_ACCOUNT_SID}",
         "CALLME_PHONE_AUTH_TOKEN": "${CALLME_PHONE_AUTH_TOKEN}",
+        "CALLME_PHONE_API_KEY": "${CALLME_PHONE_API_KEY}",
+        "CALLME_PHONE_SIGNING_KEY": "${CALLME_PHONE_SIGNING_KEY}",
         "CALLME_PHONE_NUMBER": "${CALLME_PHONE_NUMBER}",
         "CALLME_USER_PHONE_NUMBER": "${CALLME_USER_PHONE_NUMBER}",
-        "CALLME_CALLIO_BASE_URL": "${CALLME_CALLIO_BASE_URL:-https://api.claw-ops.com}",
+        "CALLME_CLAWOPS_BASE_URL": "${CALLME_CLAWOPS_BASE_URL:-https://api.claw-ops.com}",
         "CALLME_OPENAI_API_KEY": "${CALLME_OPENAI_API_KEY}",
         "CALLME_TTS_VOICE": "${CALLME_TTS_VOICE:-onyx}",
         "CALLME_NGROK_AUTHTOKEN": "${CALLME_NGROK_AUTHTOKEN}",
