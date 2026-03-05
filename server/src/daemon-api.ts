@@ -148,7 +148,10 @@ export class DaemonApi {
         res.writeHead(409);
         res.end(JSON.stringify({ error: error.message }));
       } else {
-        throw error;
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[daemon-api] Call error:', msg);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: msg }));
       }
     }
   }
@@ -188,7 +191,10 @@ export class DaemonApi {
         res.writeHead(403);
         res.end(JSON.stringify({ error: error.message }));
       } else {
-        throw error;
+        const msg = error instanceof Error ? error.message : 'Unknown error';
+        console.error('[daemon-api] Call error:', msg);
+        res.writeHead(500);
+        res.end(JSON.stringify({ error: msg }));
       }
     }
   }
