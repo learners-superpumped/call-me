@@ -256,6 +256,59 @@ await end_call({
 
 ---
 
+## Inbound Calls
+
+External callers (or you) can call the phone number directly, and Claude will answer with full access to your workspace code. This turns your phone number into a voice interface for Claude Code.
+
+### Setup
+
+Enable inbound calls by adding these variables alongside your existing configuration:
+
+| Variable | Required | Default | Description |
+|----------|----------|---------|-------------|
+| `CALLME_INBOUND_ENABLED` | No | `false` | Enable inbound call handling |
+| `CALLME_WORKSPACE_DIR` | When inbound enabled | — | Directory where Claude CLI runs for inbound calls |
+| `CALLME_INBOUND_WHITELIST` | No | — | Additional allowed phone numbers (comma-separated, E.164) |
+| `CALLME_INBOUND_PERMISSION_MODE` | No | `plan` | Claude Code permission mode for inbound sessions |
+| `CALLME_INBOUND_MAX_CALLS` | No | `1` | Max concurrent inbound calls |
+| `CALLME_INBOUND_GREETING` | No | Korean default | Greeting message when call is answered |
+
+### How It Works
+
+```
+Caller dials your number
+        │
+        ▼
+Phone Provider → webhook → CallMe Daemon
+        │
+        ▼
+Whitelist check (user number auto-allowed)
+        │
+        ▼
+TTS greeting plays (covers cold start delay)
+        │
+        ▼
+Claude CLI spawns in CALLME_WORKSPACE_DIR
+        │
+        ▼
+Voice conversation loop (STT ↔ Claude ↔ TTS)
+```
+
+1. An incoming call hits the daemon via webhook
+2. The caller's number is checked against the whitelist
+3. A TTS greeting plays immediately, covering the 5–15s cold start while Claude CLI launches
+4. Claude CLI spawns in `CALLME_WORKSPACE_DIR` with your MCP settings, skills, and `CLAUDE.md`
+5. The caller speaks naturally with Claude through the voice conversation loop
+
+### Notes
+
+- Your phone number (`CALLME_USER_PHONE_NUMBER`) is automatically whitelisted — no need to add it separately
+- The greeting TTS covers the Claude CLI cold start delay (5–15s on first turn)
+- Outbound and inbound calls share the concurrency limit — only one call at a time by default
+- Inbound sessions use existing MCP settings, skills, and `CLAUDE.md` from the workspace
+
+---
+
 ## Costs
 
 | Service        | ClawOps (self-hosted)   | Telnyx      | Twilio       |
