@@ -1,9 +1,41 @@
 #!/usr/bin/env bun
 
-import { CallManager, loadServerConfig } from './phone-call.js';
+import { CallManager, loadServerConfig, type ServerConfig } from './phone-call.js';
 import { startNgrok, stopNgrok } from './ngrok.js';
 import { DaemonApi } from './daemon-api.js';
 import { writePidFile, writeControlPort, cleanupPidFile } from './daemon-lifecycle.js';
+
+async function registerInboundWebhook(config: ServerConfig, publicUrl: string) {
+  if (config.providerConfig.phoneProvider !== 'clawops') {
+    console.error('[daemon] Webhook auto-registration is only supported for ClawOps provider');
+    return;
+  }
+
+  const { phoneAccountSid, phoneApiKey, phoneNumber } = config.providerConfig;
+  const baseUrl = process.env.CALLME_CLAWOPS_BASE_URL || 'https://api.claw-ops.com';
+  const webhookUrl = `${publicUrl}/twiml`;
+
+  try {
+    const res = await fetch(`${baseUrl}/v1/accounts/${phoneAccountSid}/numbers/${phoneNumber}`, {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${phoneApiKey}`,
+      },
+      body: JSON.stringify({ webhookUrl, webhookMethod: 'POST' }),
+    });
+
+    if (!res.ok) {
+      const body = await res.text();
+      console.error(`[daemon] Failed to register webhook (${res.status}): ${body}`);
+      return;
+    }
+
+    console.error(`[daemon] Registered inbound webhook: ${webhookUrl}`);
+  } catch (error) {
+    console.error('[daemon] Failed to register webhook:', error instanceof Error ? error.message : error);
+  }
+}
 
 async function main() {
   const webhookPort = parseInt(process.env.CALLME_PORT || '3333', 10);
@@ -29,6 +61,11 @@ async function main() {
   const serverConfig = loadServerConfig(publicUrl);
   const callManager = new CallManager(serverConfig);
   callManager.startServer();
+
+  // Auto-register webhook URL with phone provider for inbound calls
+  if (serverConfig.inboundEnabled) {
+    await registerInboundWebhook(serverConfig, publicUrl);
+  }
 
   // Auto-shutdown timer
   let shutdownTimer: ReturnType<typeof setTimeout> | null = null;
