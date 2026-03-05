@@ -558,12 +558,13 @@ export class CallManager {
   }
 
   async forceEndCallByClient(clientId: string): Promise<void> {
-    for (const [callId, state] of this.activeCalls) {
-      if (state.ownerClientId === clientId) {
-        try {
-          await this.endCall(clientId, callId, 'Connection lost. Goodbye.');
-        } catch { /* ignore errors during forced cleanup */ }
-      }
+    const callIds = Array.from(this.activeCalls.entries())
+      .filter(([, state]) => state.ownerClientId === clientId)
+      .map(([callId]) => callId);
+    for (const callId of callIds) {
+      try {
+        await this.endCall(clientId, callId, 'Connection lost. Goodbye.');
+      } catch { /* ignore errors during forced cleanup */ }
     }
   }
 

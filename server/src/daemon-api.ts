@@ -35,6 +35,9 @@ export class DaemonApi {
 
       // Check for dead clients every 5 seconds
       this.heartbeatCheckInterval = setInterval(() => this.checkDeadClients(), 5000);
+
+      // Start initial shutdown timer in case no client ever connects
+      this.config.onRefCountZero();
     });
   }
 
@@ -105,16 +108,18 @@ export class DaemonApi {
   }
 
   private async handleDisconnect(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const body = await readBody(req);
-    const { clientId } = JSON.parse(body);
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const { clientId } = body as { clientId: string };
     await this.removeClient(clientId);
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ ok: true }));
   }
 
   private async handleHeartbeat(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const body = await readBody(req);
-    const { clientId } = JSON.parse(body);
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const { clientId } = body as { clientId: string };
     const client = this.clients.get(clientId);
     if (client) {
       client.lastHeartbeat = Date.now();
@@ -124,8 +129,9 @@ export class DaemonApi {
   }
 
   private async handleInitiateCall(req: IncomingMessage, res: ServerResponse): Promise<void> {
-    const body = await readBody(req);
-    const { clientId, message } = JSON.parse(body);
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const { clientId, message } = body as { clientId: string; message: string };
 
     if (!this.clients.has(clientId)) {
       res.writeHead(401);
@@ -151,8 +157,9 @@ export class DaemonApi {
     req: IncomingMessage, res: ServerResponse,
     callId: string, action: string
   ): Promise<void> {
-    const body = await readBody(req);
-    const { clientId, message } = JSON.parse(body);
+    const body = await readJsonBody(req, res);
+    if (!body) return;
+    const { clientId, message } = body as { clientId: string; message: string };
 
     if (!this.clients.has(clientId)) {
       res.writeHead(401);
@@ -199,20 +206,43 @@ export class DaemonApi {
   private async checkDeadClients(): Promise<void> {
     const now = Date.now();
     const deadTimeout = 10000;
+    const deadClientIds: string[] = [];
     for (const [clientId, info] of this.clients) {
       if (now - info.lastHeartbeat > deadTimeout) {
-        console.error(`[daemon] Client ${clientId} heartbeat timeout, removing`);
-        await this.removeClient(clientId);
+        deadClientIds.push(clientId);
       }
+    }
+    for (const clientId of deadClientIds) {
+      console.error(`[daemon] Client ${clientId} heartbeat timeout, removing`);
+      await this.removeClient(clientId);
     }
   }
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+async function readJsonBody(req: IncomingMessage, res: ServerResponse): Promise<Record<string, unknown> | null> {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', (chunk) => { body += chunk; });
-    req.on('end', () => resolve(body));
+    let size = 0;
+    const MAX_BODY_SIZE = 1024 * 1024; // 1MB
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_BODY_SIZE) {
+        res.writeHead(413);
+        res.end(JSON.stringify({ error: 'Request body too large' }));
+        resolve(null);
+        return;
+      }
+      body += chunk;
+    });
+    req.on('end', () => {
+      try {
+        resolve(JSON.parse(body));
+      } catch {
+        res.writeHead(400);
+        res.end(JSON.stringify({ error: 'Invalid JSON' }));
+        resolve(null);
+      }
+    });
     req.on('error', reject);
   });
 }

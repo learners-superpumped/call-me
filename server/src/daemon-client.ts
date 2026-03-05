@@ -40,15 +40,25 @@ export class DaemonClient {
 
   async initiateCall(message: string): Promise<{ callId: string; response: string }> {
     const res = await this.post('/calls', { clientId: this.clientId, message }, 300000);
-    const data = await res.json();
-    if (res.status === 409) throw new Error(data.error);
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Daemon error: ${res.status} (invalid response)`);
+    }
+    if (res.status === 409) throw new Error(data.error || 'A call is already in progress');
     if (!res.ok) throw new Error(data.error || `Daemon error: ${res.status}`);
     return data as { callId: string; response: string };
   }
 
   async continueCall(callId: string, message: string): Promise<string> {
     const res = await this.post(`/calls/${callId}/continue`, { clientId: this.clientId, message }, 300000);
-    const data = await res.json() as { response?: string; error?: string };
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Daemon error: ${res.status} (invalid response)`);
+    }
     if (!res.ok) throw new Error(data.error || `Daemon error: ${res.status}`);
     return data.response!;
   }
@@ -56,14 +66,24 @@ export class DaemonClient {
   async speakOnly(callId: string, message: string): Promise<void> {
     const res = await this.post(`/calls/${callId}/speak`, { clientId: this.clientId, message }, 60000);
     if (!res.ok) {
-      const data = await res.json() as { error: string };
+      let data: any;
+      try {
+        data = await res.json();
+      } catch {
+        throw new Error(`Daemon error: ${res.status} (invalid response)`);
+      }
       throw new Error(data.error || `Daemon error: ${res.status}`);
     }
   }
 
   async endCall(callId: string, message: string): Promise<{ durationSeconds: number }> {
     const res = await this.post(`/calls/${callId}/end`, { clientId: this.clientId, message }, 60000);
-    const data = await res.json() as { durationSeconds?: number; error?: string };
+    let data: any;
+    try {
+      data = await res.json();
+    } catch {
+      throw new Error(`Daemon error: ${res.status} (invalid response)`);
+    }
     if (!res.ok) throw new Error(data.error || `Daemon error: ${res.status}`);
     return data as { durationSeconds: number };
   }

@@ -1,8 +1,8 @@
 import { spawn } from 'child_process';
-import { mkdirSync, writeFileSync, readFileSync, unlinkSync } from 'fs';
+import { mkdirSync, writeFileSync, readFileSync, unlinkSync, openSync, statSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { lockSync, unlockSync } from './flock.js';
+import { lockSync, unlockSync } from './lock.js';
 
 const CALLME_DIR = join(homedir(), '.callme');
 const PID_FILE = join(CALLME_DIR, 'daemon.pid');
@@ -64,13 +64,43 @@ async function waitForDaemonReady(port: number): Promise<void> {
 }
 
 function spawnDaemonProcess(serverRoot: string): void {
-  const child = spawn('bun', ['run', 'src/daemon.ts'], {
+  const logFile = join(CALLME_DIR, 'daemon.log');
+  const logFd = openSync(logFile, 'a');
+  const child = spawn(process.execPath, ['run', 'src/daemon.ts'], {
     cwd: serverRoot,
     detached: true,
-    stdio: 'ignore',
+    stdio: ['ignore', 'ignore', logFd],
     env: { ...process.env },
   });
   child.unref();
+}
+
+function cleanStaleLock(): void {
+  try {
+    const pid = parseInt(readFileSync(PID_FILE, 'utf-8').trim(), 10);
+    if (isNaN(pid)) {
+      unlockSync(); // No valid PID, remove stale lock
+      return;
+    }
+    try {
+      process.kill(pid, 0); // Check if process exists
+    } catch {
+      // Process is dead, clean up stale lock
+      console.error('[daemon-client] Cleaning up stale lock (daemon PID dead)');
+      unlockSync();
+    }
+  } catch {
+    // No PID file — lock might be stale from a very early crash
+    // Check if lock dir exists and is older than 60 seconds
+    try {
+      const lockDir = join(homedir(), '.callme', 'daemon.lock.d');
+      const stat = statSync(lockDir);
+      if (Date.now() - stat.mtimeMs > 60000) {
+        console.error('[daemon-client] Cleaning up stale lock (older than 60s)');
+        unlockSync();
+      }
+    } catch { /* lock dir doesn't exist, that's fine */ }
+  }
 }
 
 /**
@@ -87,6 +117,8 @@ export async function ensureDaemonRunning(serverRoot: string): Promise<number> {
 
   // Try to acquire lock and spawn
   ensureDir();
+  // Clean up stale lock if daemon is dead
+  cleanStaleLock();
   if (lockSync()) {
     try {
       // Double-check after acquiring lock
