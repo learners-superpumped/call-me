@@ -40,11 +40,9 @@ export interface PhoneProvider {
 
 export interface PhoneConfig {
   accountSid: string;
-  authToken: string;
   phoneNumber: string;
-  // ClawOps-specific: separated API key and webhook signing key
-  apiKey?: string;
-  signingKey?: string;
+  apiKey: string;
+  signingKey: string;
 }
 
 /**

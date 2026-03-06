@@ -19,7 +19,7 @@ export class ClawOpsPhoneProvider implements PhoneProvider {
 
   initialize(config: PhoneConfig): void {
     this.accountId = config.accountSid;
-    this.apiKey = config.apiKey || null;
+    this.apiKey = config.apiKey;
     console.error(`Phone provider: ClawOps (${this.baseUrl})`);
   }
 
@@ -79,7 +79,7 @@ export class ClawOpsPhoneProvider implements PhoneProvider {
   }
 
   /**
-   * ClawOps starts streaming via TwiML response (same as Twilio) — no-op
+   * ClawOps starts streaming via TwiML response — no-op
    */
   async startStreaming(_callControlId: string, _streamUrl: string): Promise<void> {}
 

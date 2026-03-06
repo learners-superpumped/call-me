@@ -19,16 +19,11 @@ Start a task, walk away. Your phone/watch rings when Claude is done, stuck, or n
 
 You'll need:
 
-- **Phone provider**: [ClawOps](https://platform.claw-ops.com) (self-hosted CPaaS), [Telnyx](https://telnyx.com), or [Twilio](https://twilio.com)
+- **Phone provider**: [ClawOps](https://platform.claw-ops.com) (self-hosted CPaaS)
 - **OpenAI API key**: For speech-to-text and text-to-speech
 - **ngrok account**: Free at [ngrok.com](https://ngrok.com) (for webhook tunneling)
 
 ### 2. Set Up Phone Provider
-
-Choose **one** of the following:
-
-<details>
-<summary><b>Option A: ClawOps (Self-hosted CPaaS — no per-minute cost)</b></summary>
 
 [ClawOps](https://platform.claw-ops.com) is a self-hosted Asterisk-based CPaaS that provides a Twilio-compatible Voice API. Use this if you have your own SIP trunk (e.g. KT Business).
 
@@ -44,70 +39,13 @@ Choose **one** of the following:
 5. Register your SIP softphone (e.g. Linphone) using the SIP credentials shown after provisioning
    - The softphone extension is used as `CALLME_USER_PHONE_NUMBER`
 
-**Environment variables for ClawOps:**
-
-```bash
-CALLME_PHONE_PROVIDER=clawops
-CALLME_PHONE_ACCOUNT_SID=<Account ID>        # e.g. ACxxxxxxxxxxxxxxxx
-CALLME_PHONE_API_KEY=<API Key>               # sk_... (for API authentication)
-CALLME_PHONE_SIGNING_KEY=<Signing Key>       # Webhook signature verification
-CALLME_PHONE_NUMBER=<Provisioned number>     # E.164 format, e.g. +821012345678
-CALLME_USER_PHONE_NUMBER=<SIP extension>     # SIP username registered to Asterisk
-CALLME_CLAWOPS_BASE_URL=https://api.claw-ops.com  # ClawOps API base URL (default)
-```
-
-</details>
-
-<details>
-<summary><b>Option B: Telnyx (50% cheaper than Twilio)</b></summary>
-
-1. Create account at [portal.telnyx.com](https://portal.telnyx.com) and verify your identity
-2. [Buy a phone number](https://portal.telnyx.com/#/numbers/buy-numbers) (~$1/month)
-3. [Create a Voice API application](https://portal.telnyx.com/#/call-control/applications):
-   - Set webhook URL to `https://your-ngrok-url/twiml` and API version to v2
-     - You can see your ngrok URL on the ngrok dashboard
-   - Note your **Application ID** and **API Key**
-4. [Verify the phone number](https://portal.telnyx.com/#/numbers/verified-numbers) you want to receive calls at
-5. (Optional but recommended) Get your **Public Key** from Account Settings > Keys & Credentials for webhook signature verification
-
-**Environment variables for Telnyx:**
-
-```bash
-CALLME_PHONE_PROVIDER=telnyx
-CALLME_PHONE_ACCOUNT_SID=<Application ID>
-CALLME_PHONE_AUTH_TOKEN=<API Key>
-CALLME_TELNYX_PUBLIC_KEY=<Public Key>  # Optional: enables webhook security
-```
-
-</details>
-
-<details>
-<summary><b>Option C: Twilio</b></summary>
-
-1. Create account at [twilio.com/console](https://www.twilio.com/console)
-2. Use the free number your account comes with or [buy a new phone number](https://www.twilio.com/console/phone-numbers/incoming) (~$1.15/month)
-3. Find your **Account SID** and **Auth Token** on the [Console Dashboard](https://www.twilio.com/console)
-
-**Environment variables for Twilio:**
-
-```bash
-CALLME_PHONE_PROVIDER=twilio
-CALLME_PHONE_ACCOUNT_SID=<Account SID>
-CALLME_PHONE_AUTH_TOKEN=<Auth Token>
-```
-
-</details>
-
 ### 3. Set Environment Variables
 
 Add these to `~/.claude/settings.json` (recommended) or export them in your shell.
 
-**Example: ClawOps**
-
 ```json
 {
   "env": {
-    "CALLME_PHONE_PROVIDER": "clawops",
     "CALLME_PHONE_ACCOUNT_SID": "ACxxxxxxxxxxxxxxxx",
     "CALLME_PHONE_API_KEY": "sk_your-api-key",
     "CALLME_PHONE_SIGNING_KEY": "your-signing-key",
@@ -120,48 +58,29 @@ Add these to `~/.claude/settings.json` (recommended) or export them in your shel
 }
 ```
 
-**Example: Telnyx**
-
-```json
-{
-  "env": {
-    "CALLME_PHONE_PROVIDER": "telnyx",
-    "CALLME_PHONE_ACCOUNT_SID": "your-connection-id",
-    "CALLME_PHONE_AUTH_TOKEN": "your-api-key",
-    "CALLME_PHONE_NUMBER": "+15551234567",
-    "CALLME_USER_PHONE_NUMBER": "+15559876543",
-    "CALLME_OPENAI_API_KEY": "sk-...",
-    "CALLME_NGROK_AUTHTOKEN": "your-ngrok-token"
-  }
-}
-```
-
 #### Required Variables
 
-| Variable                   | Description                                                    |
-| -------------------------- | -------------------------------------------------------------- |
-| `CALLME_PHONE_PROVIDER`    | `clawops`, `telnyx` (default), or `twilio`                     |
-| `CALLME_PHONE_ACCOUNT_SID` | ClawOps Account ID / Telnyx Connection ID / Twilio Account SID |
-| `CALLME_PHONE_AUTH_TOKEN`  | Telnyx API Key / Twilio Auth Token (not used for ClawOps)      |
-| `CALLME_PHONE_API_KEY`     | ClawOps only: API key for API calls (`sk_...`)                 |
-| `CALLME_PHONE_SIGNING_KEY` | ClawOps only: Webhook signing key for signature verification   |
-| `CALLME_PHONE_NUMBER`      | Phone number Claude calls from (E.164 format)                  |
-| `CALLME_USER_PHONE_NUMBER` | Your phone number or SIP extension to receive calls            |
-| `CALLME_OPENAI_API_KEY`    | OpenAI API key (for TTS and realtime STT)                      |
-| `CALLME_NGROK_AUTHTOKEN`   | ngrok auth token for webhook tunneling                         |
+| Variable                   | Description                                        |
+| -------------------------- | -------------------------------------------------- |
+| `CALLME_PHONE_ACCOUNT_SID` | ClawOps Account ID (`AC...`)                       |
+| `CALLME_PHONE_API_KEY`     | ClawOps API key for API calls (`sk_...`)            |
+| `CALLME_PHONE_SIGNING_KEY` | ClawOps Webhook signing key for signature verification |
+| `CALLME_PHONE_NUMBER`      | Phone number Claude calls from (E.164 format)      |
+| `CALLME_USER_PHONE_NUMBER` | Your phone number or SIP extension to receive calls |
+| `CALLME_OPENAI_API_KEY`    | OpenAI API key (for TTS and realtime STT)          |
+| `CALLME_NGROK_AUTHTOKEN`   | ngrok auth token for webhook tunneling             |
 
 #### Optional Variables
 
-| Variable                         | Default                    | Description                                                        |
-| -------------------------------- | -------------------------- | ------------------------------------------------------------------ |
-| `CALLME_CLAWOPS_BASE_URL`        | `https://api.claw-ops.com` | ClawOps API base URL (ClawOps only)                                |
-| `CALLME_TTS_VOICE`               | `onyx`                     | OpenAI voice: alloy, echo, fable, onyx, nova, shimmer              |
-| `CALLME_PORT`                    | `3333`                     | Webhook HTTP server port                                           |
-| `CALLME_CONTROL_PORT`            | `3334`                     | Daemon control API port                                            |
-| `CALLME_NGROK_DOMAIN`            | -                          | Custom ngrok domain (paid feature)                                 |
-| `CALLME_TRANSCRIPT_TIMEOUT_MS`   | `180000`                   | Timeout for user speech (3 minutes)                                |
-| `CALLME_STT_SILENCE_DURATION_MS` | `800`                      | Silence duration to detect end of speech                           |
-| `CALLME_TELNYX_PUBLIC_KEY`       | -                          | Telnyx public key for webhook signature verification (recommended) |
+| Variable                         | Default                    | Description                                           |
+| -------------------------------- | -------------------------- | ----------------------------------------------------- |
+| `CALLME_CLAWOPS_BASE_URL`        | `https://api.claw-ops.com` | ClawOps API base URL                                  |
+| `CALLME_TTS_VOICE`               | `onyx`                     | OpenAI voice: alloy, echo, fable, onyx, nova, shimmer |
+| `CALLME_PORT`                    | `3333`                     | Webhook HTTP server port                              |
+| `CALLME_CONTROL_PORT`            | `3334`                     | Daemon control API port                               |
+| `CALLME_NGROK_DOMAIN`            | -                          | Custom ngrok domain (paid feature)                    |
+| `CALLME_TRANSCRIPT_TIMEOUT_MS`   | `180000`                   | Timeout for user speech (3 minutes)                   |
+| `CALLME_STT_SILENCE_DURATION_MS` | `800`                      | Silence duration to detect end of speech              |
 
 ### 4. Install Plugin
 
@@ -189,8 +108,7 @@ Claude Code C ──stdio──► MCP Server C ──┘
                               └── Call Manager
                                         │
                                         ▼
-                                  Phone Provider
-                                  (ClawOps / Telnyx / Twilio)
+                                    ClawOps
                                         │
                                         ▼
                                   Your Phone rings
@@ -279,7 +197,7 @@ Enable inbound calls by adding these variables alongside your existing configura
 Caller dials your number
         │
         ▼
-Phone Provider → webhook → CallMe Daemon
+ClawOps → webhook → CallMe Daemon
         │
         ▼
 Whitelist check (user number auto-allowed)
@@ -311,17 +229,17 @@ Voice conversation loop (STT ↔ Claude ↔ TTS)
 
 ## Costs
 
-| Service        | ClawOps (self-hosted)   | Telnyx      | Twilio       |
-| -------------- | ----------------------- | ----------- | ------------ |
-| Outbound calls | SIP trunk cost only     | ~$0.007/min | ~$0.014/min  |
-| Phone number   | Provisioned via ClawOps | ~$1/month   | ~$1.15/month |
+| Service        | Cost                      |
+| -------------- | ------------------------- |
+| Outbound calls | SIP trunk cost only       |
+| Phone number   | Provisioned via ClawOps   |
 
-Plus OpenAI costs (same for all providers):
+Plus OpenAI costs:
 
 - **Speech-to-text**: ~$0.006/min (Realtime STT)
 - **Text-to-speech**: ~$0.02/min (TTS)
 
-**Total**: ClawOps ~$0.02/min | Telnyx ~$0.03/min | Twilio ~$0.04/min
+**Total**: ~$0.02/min + SIP trunk
 
 ---
 
@@ -336,13 +254,13 @@ Plus OpenAI costs (same for all providers):
 ### Call doesn't connect
 
 1. Check the MCP server logs (stderr) with `claude --debug`
-2. Verify your phone provider credentials are correct
+2. Verify your ClawOps credentials are correct
 3. Make sure ngrok can create a tunnel
 
 ### Audio issues
 
-1. Ensure your phone number is verified with your provider
-2. Check that the webhook URL in your provider dashboard matches your ngrok URL
+1. Ensure your phone number is provisioned in ClawOps
+2. Check that the webhook URL matches your ngrok URL
 
 ### ngrok errors
 

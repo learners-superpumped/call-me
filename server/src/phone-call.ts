@@ -9,8 +9,7 @@ import {
   type RealtimeSTTSession,
 } from './providers/index.js';
 import {
-  validateTwilioSignature,
-  validateTelnyxSignature,
+  validateWebhookSignature,
   generateWebSocketToken,
   validateWebSocketToken,
 } from './webhook-security.js';
@@ -29,8 +28,8 @@ interface CallState {
   callControlId: string | null;
   userPhoneNumber: string;
   ws: WebSocket | null;
-  streamSid: string | null;  // Twilio media stream ID (required for sending audio)
-  streamingReady: boolean;  // True when streaming.started event received (Telnyx)
+  streamSid: string | null;  // Media stream ID (required for sending audio)
+  streamingReady: boolean;  // True when streaming is ready
   wsToken: string;  // Security token for WebSocket authentication
   conversationHistory: Array<{ speaker: 'claude' | 'user'; message: string }>;
   startTime: number;
@@ -227,14 +226,14 @@ export class CallManager {
       ws.on('message', (message: Buffer | string) => {
         const msgBuffer = Buffer.isBuffer(message) ? message : Buffer.from(message);
 
-        // Parse JSON messages from Twilio to capture streamSid and handle events
+        // Parse JSON messages to capture streamSid and handle events
         if (msgBuffer.length > 0 && msgBuffer[0] === 0x7b) {
           try {
             const msg = JSON.parse(msgBuffer.toString());
             const msgState = this.activeCalls.get(callId) || this.inboundCalls.get(callId);
 
             // Capture streamSid from "start" event (required for sending audio back)
-            // Support both Twilio (streamSid) and ClawOps (start.streamId / start.streamSid)
+            // Support streamSid/streamId field names
             const capturedStreamSid = msg.streamSid || msg.start?.streamSid || msg.start?.streamId;
             if (msg.event === 'start' && capturedStreamSid && msgState) {
               msgState.streamSid = capturedStreamSid;
@@ -300,92 +299,45 @@ export class CallManager {
   private handlePhoneWebhook(req: IncomingMessage, res: ServerResponse): void {
     const contentType = req.headers['content-type'] || '';
 
-    // Telnyx sends JSON webhooks
-    if (contentType.includes('application/json')) {
-      let body = '';
-      req.on('data', (chunk) => { body += chunk; });
-      req.on('end', async () => {
-        try {
-          // Validate Telnyx signature if public key is configured
-          const telnyxPublicKey = this.config.providerConfig.telnyxPublicKey;
-          if (telnyxPublicKey) {
-            const signature = req.headers['telnyx-signature-ed25519'] as string | undefined;
-            const timestamp = req.headers['telnyx-timestamp'] as string | undefined;
+    if (!contentType.includes('application/x-www-form-urlencoded')) {
+      console.error('[Security] Rejecting webhook with unsupported content type:', contentType);
+      res.writeHead(400);
+      res.end('Invalid content type');
+      return;
+    }
 
-            if (!validateTelnyxSignature(telnyxPublicKey, signature, timestamp, body)) {
-              console.error('[Security] Rejecting Telnyx webhook: invalid signature');
-              res.writeHead(401);
-              res.end('Invalid signature');
-              return;
-            }
+    let body = '';
+    req.on('data', (chunk) => { body += chunk; });
+    req.on('end', async () => {
+      try {
+        const params = new URLSearchParams(body);
+
+        const signingKey = this.config.providerConfig.phoneSigningKey;
+        const signature = req.headers['x-signature'] as string | undefined;
+        const webhookUrl = `${this.config.publicUrl}/twiml`;
+
+        if (!validateWebhookSignature(signingKey, signature, webhookUrl, params)) {
+          const isNgrokFreeTier = new URL(this.config.publicUrl).hostname.endsWith('.ngrok-free.app');
+          if (isNgrokFreeTier) {
+            console.error('[Security] Webhook signature validation failed (proceeding anyway for ngrok compatibility)');
           } else {
-            console.error('[Security] Warning: CALLME_TELNYX_PUBLIC_KEY not set, skipping signature verification');
+            console.error('[Security] Rejecting webhook: invalid signature');
+            res.writeHead(401);
+            res.end('Invalid signature');
+            return;
           }
-
-          const event = JSON.parse(body);
-          await this.handleTelnyxWebhook(event, res);
-        } catch (error) {
-          console.error('Error parsing webhook:', error);
-          res.writeHead(400);
-          res.end('Invalid JSON');
         }
-      });
-      return;
-    }
 
-    // Twilio sends form-urlencoded webhooks
-    if (contentType.includes('application/x-www-form-urlencoded')) {
-      let body = '';
-      req.on('data', (chunk) => { body += chunk; });
-      req.on('end', async () => {
-        try {
-          const params = new URLSearchParams(body);
-
-          // Validate webhook signature (Twilio: x-twilio-signature, ClawOps: x-signature)
-          // ClawOps uses a dedicated signing key; Twilio uses auth token for both API and signing
-          const isClawOps = this.config.providerConfig.phoneProvider === 'clawops';
-          const authToken = isClawOps
-            ? (this.config.providerConfig.phoneSigningKey || '')
-            : this.config.providerConfig.phoneAuthToken;
-          const signature = isClawOps
-            ? req.headers['x-signature'] as string | undefined
-            : req.headers['x-twilio-signature'] as string | undefined;
-          // Use the known public URL directly - reconstructing from headers fails with ngrok
-          // because ngrok doesn't preserve headers exactly as Twilio sends them
-          const webhookUrl = `${this.config.publicUrl}/twiml`;
-
-          if (!validateTwilioSignature(authToken, signature, webhookUrl, params)) {
-            const isNgrokFreeTier = new URL(this.config.publicUrl).hostname.endsWith('.ngrok-free.app');
-            if (isNgrokFreeTier) {
-              // Only log if ngrok free tier is used
-              // Log for debugging but proceed anyway - ngrok free tier causes signature mismatches
-              console.error('[Security] Webhook signature validation failed (proceeding anyway for ngrok compatibility)');
-            } else {
-              console.error(`[Security] Rejecting ${isClawOps ? 'ClawOps' : 'Twilio'} webhook: invalid signature`);
-              res.writeHead(401);
-              res.end('Invalid signature');
-              return;
-            }
-          }
-
-          await this.handleTwilioWebhook(params, res);
-        } catch (error) {
-          console.error('Error parsing Twilio webhook:', error);
-          res.writeHead(400);
-          res.end('Invalid form data');
-        }
-      });
-      return;
-    }
-
-    // Fallback: Reject unknown content types
-    console.error('[Security] Rejecting webhook with unknown content type:', contentType);
-    res.writeHead(400);
-    res.end('Invalid content type');
+        await this.handleWebhook(params, res);
+      } catch (error) {
+        console.error('Error parsing webhook:', error);
+        res.writeHead(400);
+        res.end('Invalid form data');
+      }
+    });
   }
 
-  private async handleTwilioWebhook(params: URLSearchParams, res: ServerResponse): Promise<void> {
-    // Support both Twilio (CallSid) and ClawOps (CallId) field names
+  private async handleWebhook(params: URLSearchParams, res: ServerResponse): Promise<void> {
     const callSid = params.get('CallSid') || params.get('CallId');
     const callStatus = params.get('CallStatus');
     const fromNumber = params.get('From') || params.get('Caller') || '';
@@ -439,19 +391,19 @@ export class CallManager {
 
     // Unknown call → treat as inbound
     if (!this.config.inboundEnabled) {
-      console.error(`[inbound] Rejecting Twilio call: inbound disabled`);
+      console.error(`[inbound] Rejecting call: inbound disabled`);
       res.writeHead(200, { 'Content-Type': 'application/xml' });
       res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
       return;
     }
     if (!this.isWhitelisted(fromNumber)) {
-      console.error(`[inbound] Rejecting Twilio call from ${fromNumber}: not in whitelist`);
+      console.error(`[inbound] Rejecting call from ${fromNumber}: not in whitelist`);
       res.writeHead(200, { 'Content-Type': 'application/xml' });
       res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
       return;
     }
     if (this.getTotalActiveCalls() >= this.config.inboundMaxCalls) {
-      console.error(`[inbound] Rejecting Twilio call: max calls reached`);
+      console.error(`[inbound] Rejecting call: max calls reached`);
       res.writeHead(200, { 'Content-Type': 'application/xml' });
       res.end('<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>');
       return;
@@ -463,10 +415,10 @@ export class CallManager {
       return;
     }
 
-    await this.handleInboundTwilioCall(callSid, fromNumber, res);
+    await this.handleInboundCall(callSid, fromNumber, res);
   }
 
-  private async handleInboundTwilioCall(callSid: string, fromNumber: string, res: ServerResponse): Promise<void> {
+  private async handleInboundCall(callSid: string, fromNumber: string, res: ServerResponse): Promise<void> {
     const callId = `inbound-${++this.currentInboundCallId}-${Date.now()}`;
     const wsToken = generateWebSocketToken();
 
@@ -505,173 +457,6 @@ export class CallManager {
     res.end(xml);
 
     // Start conversation loop asynchronously
-    this.runInboundConversation(callId).finally(() => {
-      this.cleanupInboundCall(callId).catch(console.error);
-    });
-  }
-
-  private async handleTelnyxWebhook(event: any, res: ServerResponse): Promise<void> {
-    const eventType = event.data?.event_type;
-    const callControlId = event.data?.payload?.call_control_id;
-
-    console.error(`Phone webhook: ${eventType}`);
-
-    // Always respond 200 OK immediately
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ status: 'ok' }));
-
-    if (!callControlId) return;
-
-    try {
-      switch (eventType) {
-        case 'call.initiated': {
-          const direction = event.data?.payload?.direction;
-          if (direction === 'incoming' && !this.callControlIdToCallId.has(callControlId)) {
-            const fromNumber = event.data?.payload?.from || '';
-            await this.handleInboundTelnyxCall(callControlId, fromNumber);
-          }
-          break;
-        }
-
-        case 'call.answered': {
-          // Include security token in the stream URL
-          let streamUrl = `wss://${new URL(this.config.publicUrl).host}/media-stream`;
-          const callId = this.callControlIdToCallId.get(callControlId);
-          if (callId) {
-            const state = this.activeCalls.get(callId);
-            if (state) {
-              streamUrl += `?token=${encodeURIComponent(state.wsToken)}`;
-            }
-          } else {
-            // Check inbound calls
-            const inboundCallId = this.findInboundCallByControlId(callControlId);
-            if (inboundCallId) {
-              const inboundState = this.inboundCalls.get(inboundCallId);
-              if (inboundState) {
-                streamUrl += `?token=${encodeURIComponent(inboundState.wsToken)}`;
-              }
-            }
-          }
-          await this.config.providers.phone.startStreaming(callControlId, streamUrl);
-          console.error(`Started streaming for call ${callControlId}`);
-          break;
-        }
-
-        case 'call.hangup': {
-          const hangupCallId = this.callControlIdToCallId.get(callControlId);
-          if (hangupCallId) {
-            this.callControlIdToCallId.delete(callControlId);
-            const hangupState = this.activeCalls.get(hangupCallId);
-            if (hangupState) {
-              hangupState.hungUp = true;
-              hangupState.ws?.close();
-            }
-          }
-          // Check inbound calls
-          const inboundHangupCallId = this.findInboundCallByControlId(callControlId);
-          if (inboundHangupCallId) {
-            const inboundState = this.inboundCalls.get(inboundHangupCallId);
-            if (inboundState) {
-              inboundState.hungUp = true;
-              // ws.close() will be handled by cleanupInboundCall
-            }
-          }
-          break;
-        }
-
-        case 'call.machine.detection.ended': {
-          const result = event.data?.payload?.result;
-          console.error(`AMD result: ${result}`);
-          break;
-        }
-
-        case 'streaming.started': {
-          const streamCallId = this.callControlIdToCallId.get(callControlId);
-          if (streamCallId) {
-            const streamState = this.activeCalls.get(streamCallId);
-            if (streamState) {
-              streamState.streamingReady = true;
-              console.error(`[${streamCallId}] Streaming ready`);
-            }
-          }
-          // Check inbound calls
-          const inboundStreamCallId = this.findInboundCallByControlId(callControlId);
-          if (inboundStreamCallId) {
-            const inboundStreamState = this.inboundCalls.get(inboundStreamCallId);
-            if (inboundStreamState) {
-              inboundStreamState.streamingReady = true;
-              console.error(`[${inboundStreamCallId}] Streaming ready`);
-            }
-          }
-          break;
-        }
-
-        case 'streaming.stopped':
-          break;
-      }
-    } catch (error) {
-      console.error(`Error handling webhook ${eventType}:`, error);
-    }
-  }
-
-  private async handleInboundTelnyxCall(callControlId: string, fromNumber: string): Promise<void> {
-    if (!this.config.inboundEnabled) {
-      console.error(`[inbound] Rejecting Telnyx call: inbound disabled`);
-      await this.config.providers.phone.hangup(callControlId);
-      return;
-    }
-    if (!this.isWhitelisted(fromNumber)) {
-      console.error(`[inbound] Rejecting Telnyx call from ${fromNumber}: not in whitelist`);
-      await this.config.providers.phone.hangup(callControlId);
-      return;
-    }
-    if (this.getTotalActiveCalls() >= this.config.inboundMaxCalls) {
-      console.error(`[inbound] Rejecting Telnyx call: max calls reached`);
-      await this.config.providers.phone.hangup(callControlId);
-      return;
-    }
-
-    const callId = `inbound-${++this.currentInboundCallId}-${Date.now()}`;
-    const wsToken = generateWebSocketToken();
-    console.error(`[inbound] Accepting Telnyx call ${callId} from ${fromNumber}`);
-
-    const sttSession = this.config.providers.stt.createSession();
-    await sttSession.connect();
-
-    const state: InboundCallState = {
-      callId, callControlId, fromNumber,
-      ws: null, streamSid: null, streamingReady: false, wsToken,
-      claudeSession: null, sttSession,
-      conversationHistory: [], startTime: Date.now(), hungUp: false,
-    };
-
-    this.inboundCalls.set(callId, state);
-    this.wsTokenToCallId.set(wsToken, callId);
-
-    // Answer the inbound Telnyx call
-    try {
-      const config = this.config.providerConfig;
-      const response = await fetch(
-        `https://api.telnyx.com/v2/calls/${callControlId}/actions/answer`,
-        {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${config.phoneAuthToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({}),
-        }
-      );
-      if (!response.ok) {
-        const error = await response.text();
-        throw new Error(`Telnyx answer failed: ${response.status} ${error}`);
-      }
-    } catch (err) {
-      console.error(`[inbound] Failed to answer Telnyx call ${callId}:`, err);
-      this.cleanupInboundCall(callId).catch(console.error);
-      return;
-    }
-
     this.runInboundConversation(callId).finally(() => {
       this.cleanupInboundCall(callId).catch(console.error);
     });
@@ -722,7 +507,7 @@ export class CallManager {
       console.error(`Call initiated: ${callControlId} -> ${this.config.userPhoneNumber}`);
 
       // Start TTS generation in parallel with waiting for connection
-      // This reduces latency by generating audio while Twilio establishes the stream
+      // This reduces latency by generating audio while the stream establishes
       const ttsPromise = this.generateTTSAudio(message);
 
       await this.waitForConnection(callId, 15000);
@@ -811,8 +596,7 @@ export class CallManager {
     while (Date.now() - startTime < timeout) {
       const state = this.activeCalls.get(callId);
       // Wait for WebSocket AND streaming to be ready:
-      // - Twilio: streamSid is set from "start" WebSocket event
-      // - Telnyx: streamingReady is set from "streaming.started" webhook
+      // streamSid is set from "start" WebSocket event
       const wsReady = state?.ws && state.ws.readyState === WebSocket.OPEN;
       const streamReady = state?.streamSid || state?.streamingReady;
       if (wsReady && streamReady) {
