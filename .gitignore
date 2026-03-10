@@ -25,3 +25,6 @@ Thumbs.db
 
 # Test coverage
 coverage/
+
+# Plans
+docs/plans/
