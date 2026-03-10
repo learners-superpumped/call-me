@@ -1,15 +1,16 @@
-# Dependencies
-node_modules/
-bun.lockb
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+*.egg-info/
 
 # Environment variables
 .env
 .env.local
 .env.*.local
 
-# Build output
-server/dist/
-server/node_modules/
+# Logs
 *.log
 
 # IDE
@@ -22,9 +23,6 @@ server/node_modules/
 # OS
 .DS_Store
 Thumbs.db
-
-# Test coverage
-coverage/
 
 # Plans
 docs/plans/

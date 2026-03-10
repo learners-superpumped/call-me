@@ -10,6 +10,7 @@
 - **다중 턴 대화** - 자연스럽게 대화하며 의사결정.
 - **어디서나 동작** - 스마트폰, 스마트워치, 유선 전화까지!
 - **Tool-use 조합 가능** - 통화 중에도 Claude가 웹 검색 등 다른 도구를 사용할 수 있음.
+- **ngrok 불필요** - ClawOps SDK의 reverse WebSocket으로 직접 연결.
 
 ---
 
@@ -21,7 +22,7 @@
 
 - **전화 제공자**: [ClawOps](https://platform.claw-ops.com) (자체 호스팅 CPaaS)
 - **OpenAI API 키**: 음성-텍스트 변환(STT) 및 텍스트-음성 변환(TTS)용
-- **ngrok 계정**: [ngrok.com](https://ngrok.com)에서 무료 가입 (웹훅 터널링용)
+- **Python 3.11+**: 플러그인 런타임
 
 ### 2. 전화 제공자 설정
 
@@ -33,7 +34,7 @@
 
 1. ClawOps 웹 대시보드에 로그인
 2. **설정 → API Keys**에서 API 키 생성 (`sk_...` 키가 발급됨 — 한 번만 표시되므로 저장 필수)
-3. 같은 설정 페이지에서 **Account ID**와 **Webhook Signing Key** 복사
+3. 같은 설정 페이지에서 **Account ID** 복사
 4. 대시보드에서 전화번호 프로비저닝 (`Numbers` → `Provision Number`)
    - 프로비저닝된 번호가 `CALLME_PHONE_NUMBER`로 사용됨
 5. 프로비저닝 후 표시되는 SIP 인증 정보로 SIP 소프트폰(예: Linphone) 등록
@@ -48,12 +49,10 @@
   "env": {
     "CALLME_PHONE_ACCOUNT_SID": "ACxxxxxxxxxxxxxxxx",
     "CALLME_PHONE_API_KEY": "sk_your-api-key",
-    "CALLME_PHONE_SIGNING_KEY": "your-signing-key",
     "CALLME_PHONE_NUMBER": "+821012345678",
     "CALLME_USER_PHONE_NUMBER": "softphone",
     "CALLME_CLAWOPS_BASE_URL": "https://api.claw-ops.com",
-    "CALLME_OPENAI_API_KEY": "sk-...",
-    "CALLME_NGROK_AUTHTOKEN": "your-ngrok-token"
+    "CALLME_OPENAI_API_KEY": "sk-..."
   }
 }
 ```
@@ -64,11 +63,9 @@
 | -------------------------- | --------------------------------------- |
 | `CALLME_PHONE_ACCOUNT_SID` | ClawOps Account ID (`AC...`)            |
 | `CALLME_PHONE_API_KEY`     | ClawOps API 키 (`sk_...`)               |
-| `CALLME_PHONE_SIGNING_KEY` | ClawOps 웹훅 서명 키 (서명 검증용)      |
 | `CALLME_PHONE_NUMBER`      | Claude가 발신하는 전화번호 (E.164 형식) |
 | `CALLME_USER_PHONE_NUMBER` | 수신할 전화번호 또는 SIP 내선번호       |
 | `CALLME_OPENAI_API_KEY`    | OpenAI API 키 (TTS 및 실시간 STT용)     |
-| `CALLME_NGROK_AUTHTOKEN`   | ngrok 인증 토큰 (웹훅 터널링용)         |
 
 #### 선택 변수
 
@@ -76,20 +73,20 @@
 | -------------------------------- | -------------------------- | ---------------------------------------------------- |
 | `CALLME_CLAWOPS_BASE_URL`        | `https://api.claw-ops.com` | ClawOps API 기본 URL                                 |
 | `CALLME_TTS_VOICE`               | `onyx`                     | OpenAI 음성: alloy, echo, fable, onyx, nova, shimmer |
-| `CALLME_PORT`                    | `3333`                     | 웹훅 HTTP 서버 포트                                  |
 | `CALLME_CONTROL_PORT`            | `3334`                     | 데몬 제어 API 포트                                   |
-| `CALLME_NGROK_DOMAIN`            | -                          | 커스텀 ngrok 도메인 (유료 기능)                      |
 | `CALLME_TRANSCRIPT_TIMEOUT_MS`   | `180000`                   | 사용자 음성 대기 타임아웃 (3분)                      |
 | `CALLME_STT_SILENCE_DURATION_MS` | `800`                      | 발화 종료 감지 무음 시간                             |
 
 ### 4. 플러그인 설치
 
 ```bash
-/plugin marketplace add learners-superpumped/call-me
+/plugin marketplace add learners-superpumped/clawops-call-me
 /plugin install callme@callme
 ```
 
-Claude Code를 재시작하면 완료!
+`uv`가 설치되어 있으면 Python 의존성이 자동으로 관리됩니다. Claude Code를 재시작하면 완료!
+
+> **전제 조건**: [uv](https://docs.astral.sh/uv/getting-started/installation/)가 설치되어 있어야 합니다 (`brew install uv` 또는 `curl -LsSf https://astral.sh/uv/install.sh | sh`)
 
 ---
 
@@ -102,13 +99,16 @@ Claude Code C ──stdio──► MCP Server C ──┘
                                         │
                                         ▼
                             ClawOps CallMe Daemon (공유)
-                              ├── ngrok 터널 (단일)
-                              ├── 웹훅 HTTP 서버
-                              ├── WebSocket 미디어 스트림
-                              └── Call Manager
+                              ├── ClawOps SDK Agent
+                              │     ├── Control WS (reverse, no ngrok!)
+                              │     └── Media WS (per-call)
+                              ├── CallMeSession
+                              │     ├── OpenAI Realtime STT
+                              │     └── OpenAI TTS
+                              └── Claude CLI (인바운드)
                                         │
                                         ▼
-                                    ClawOps
+                                    ClawOps 서버
                                         │
                                         ▼
                                   전화가 울림
@@ -116,7 +116,9 @@ Claude Code C ──stdio──► MCP Server C ──┘
                                   텍스트가 Claude에게 전달
 ```
 
-여러 Claude Code 세션이 하나의 데몬 프로세스를 공유합니다. 첫 번째 MCP 서버가 데몬을 자동 시작하고, 이후 서버들은 기존 데몬에 연결됩니다. 데몬은 하나의 ngrok 터널, 하나의 웹훅 서버, 모든 통화 상태를 관리합니다. 모든 MCP 서버가 연결을 끊으면 30초 후 데몬이 자동 종료됩니다.
+**v3.0의 핵심 변경**: ngrok 터널, 웹훅 HTTP 서버, WebSocket 미디어 서버가 모두 제거되고 ClawOps Python SDK의 **reverse WebSocket**으로 대체되었습니다. 에이전트가 서버에 직접 연결하므로 공개 URL이 필요하지 않습니다.
+
+여러 Claude Code 세션이 하나의 데몬 프로세스를 공유합니다. 첫 번째 MCP 서버가 데몬을 자동 시작하고, 이후 서버들은 기존 데몬에 연결됩니다. 모든 MCP 서버가 연결을 끊으면 30초 후 데몬이 자동 종료됩니다.
 
 ---
 
@@ -197,7 +199,7 @@ await end_call({
 발신자가 전화번호로 전화
         │
         ▼
-ClawOps → 웹훅 → ClawOps CallMe Daemon
+ClawOps → SDK Control WS → CallMe Daemon
         │
         ▼
 화이트리스트 확인 (사용자 번호 자동 허용)
@@ -211,12 +213,6 @@ CALLME_WORKSPACE_DIR에서 Claude CLI 실행
         ▼
 음성 대화 루프 (STT ↔ Claude ↔ TTS)
 ```
-
-1. 수신 전화가 웹훅을 통해 데몬에 도달
-2. 발신자 번호를 화이트리스트에서 확인
-3. TTS 인사말이 즉시 재생되어 Claude CLI 실행 지연(5~15초)을 커버
-4. `CALLME_WORKSPACE_DIR`에서 MCP 설정, 스킬, `CLAUDE.md`와 함께 Claude CLI 실행
-5. 발신자가 음성 대화 루프를 통해 Claude와 자연스럽게 대화
 
 ### 참고 사항
 
@@ -255,18 +251,7 @@ OpenAI 비용 추가:
 
 1. `claude --debug`로 MCP 서버 로그(stderr) 확인
 2. ClawOps 인증 정보가 올바른지 확인
-3. ngrok이 터널을 생성할 수 있는지 확인
-
-### 오디오 문제
-
-1. ClawOps에서 전화번호가 프로비저닝되었는지 확인
-2. 웹훅 URL이 ngrok URL과 일치하는지 확인
-
-### ngrok 오류
-
-1. `CALLME_NGROK_AUTHTOKEN`이 올바른지 확인
-2. ngrok 무료 티어 한도에 도달했는지 확인
-3. `CALLME_PORT=3335`로 다른 포트 시도
+3. ClawOps 서버가 Agent Listen 모드를 지원하는지 확인
 
 ### 데몬 문제
 
@@ -280,10 +265,11 @@ OpenAI 비용 추가:
 ## 개발
 
 ```bash
-cd server
-bun install
-bun run dev          # MCP 서버 (데몬 자동 시작)
-bun run daemon       # 데몬 수동 시작
+# MCP 서버 실행 (데몬 자동 시작, uv가 의존성 자동 관리)
+uv run python -m callme
+
+# 데몬 수동 시작
+uv run python -m callme.daemon
 ```
 
 ---
