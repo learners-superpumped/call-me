@@ -10,7 +10,6 @@
 - **다중 턴 대화** - 자연스럽게 대화하며 의사결정.
 - **어디서나 동작** - 스마트폰, 스마트워치, 유선 전화까지!
 - **Tool-use 조합 가능** - 통화 중에도 Claude가 웹 검색 등 다른 도구를 사용할 수 있음.
-- **ngrok 불필요** - ClawOps SDK의 reverse WebSocket으로 직접 연결.
 
 ---
 
@@ -20,24 +19,22 @@
 
 다음이 필요합니다:
 
-- **전화 제공자**: [ClawOps](https://platform.claw-ops.com) (자체 호스팅 CPaaS)
-- **OpenAI API 키**: 음성-텍스트 변환(STT) 및 텍스트-음성 변환(TTS)용
-- **Python 3.11+**: 플러그인 런타임
+- **ClawOps 계정**: [platform.claw-ops.com](https://platform.claw-ops.com)에서 가입
+- **OpenAI API 키**: 음성 인식(STT) 및 음성 합성(TTS)용
+- **Python 3.11+** 및 [uv](https://docs.astral.sh/uv/getting-started/installation/)
 
-### 2. 전화 제공자 설정
+### 2. ClawOps 설정
 
-[ClawOps](https://platform.claw-ops.com)는 Asterisk 기반 자체 호스팅 CPaaS로, Twilio 호환 Voice API를 제공합니다. SIP 트렁크(예: KT 비즈니스)를 보유한 경우 사용하세요.
-
-**전제 조건**: ClawOps 인스턴스가 실행 중이어야 합니다.
+[platform.claw-ops.com](https://platform.claw-ops.com)에서 가입하고 전화번호를 등록하세요.
 
 **설정 단계:**
 
-1. ClawOps 웹 대시보드에 로그인
-2. **설정 → API Keys**에서 API 키 생성 (`sk_...` 키가 발급됨 — 한 번만 표시되므로 저장 필수)
-3. 같은 설정 페이지에서 **Account ID** 복사
-4. 대시보드에서 전화번호 프로비저닝 (`Numbers` → `Provision Number`)
-   - 프로비저닝된 번호가 `CALLME_PHONE_NUMBER`로 사용됨
-5. 프로비저닝 후 표시되는 SIP 인증 정보로 SIP 소프트폰(예: Linphone) 등록
+1. [platform.claw-ops.com](https://platform.claw-ops.com)에서 가입/로그인
+2. **API & Webhooks** 페이지에서 **+ 새 키 생성** 클릭 (`sk_...` 키가 발급됨 — 한 번만 표시되므로 저장 필수)
+3. 같은 페이지에서 **Account ID** (`AC...`) 복사
+4. **전화번호** 페이지에서 **+ 번호 추가** 클릭
+   - 등록된 번호가 `CALLME_PHONE_NUMBER`로 사용됨 (예: `070-5235-8010`)
+5. SIP 소프트폰(예: Linphone)으로 등록하여 수신 설정
    - 소프트폰 내선번호가 `CALLME_USER_PHONE_NUMBER`로 사용됨
 
 ### 3. 환경변수 설정
@@ -223,19 +220,40 @@ CALLME_WORKSPACE_DIR에서 Claude CLI 실행
 
 ---
 
-## 비용
+## 요금제
 
-| 서비스    | 비용                   |
-| --------- | ---------------------- |
-| 발신 통화 | SIP 트렁크 비용만      |
-| 전화번호  | ClawOps에서 프로비저닝 |
+### ClawOps
 
-OpenAI 비용 추가:
+[platform.claw-ops.com](https://platform.claw-ops.com)에서 가입하여 사용합니다.
 
-- **음성-텍스트 변환(STT)**: ~$0.006/분 (Realtime STT)
-- **텍스트-음성 변환(TTS)**: ~$0.02/분
+> **수신통화(인바운드)는 모든 플랜에서 무제한 무료**입니다. 비용은 발신통화(아웃바운드)에만 발생합니다.
 
-**합계**: ~$0.02/분 + SIP 트렁크
+| 플랜           | 월 요금   | 회선 (=전화번호) | 동시통화 | 발신통화     | SMS     | 수신통화    |
+| -------------- | --------- | ---------------- | -------- | ------------ | ------- | ----------- |
+| **Starter**    | ₩19,900   | 1개              | 1건      | 60분 포함    | 100건   | 무제한 무료 |
+| **Growth**     | ₩49,900   | 3개              | 3건      | 300분 포함   | 500건   | 무제한 무료 |
+| **Business**   | ₩149,000  | 10개             | 10건     | 1,000분 포함 | 3,000건 | 무제한 무료 |
+| **Enterprise** | 별도 문의 | 맞춤             | 맞춤     | 종량제       | 종량제  | 무제한 무료 |
+
+**종량제 단가** (포함 분량 초과 시):
+
+| 항목      | 단가       |
+| --------- | ---------- |
+| 발신통화  | 116원/분   |
+| 수신통화  | 무료       |
+| SMS       | 17원/건    |
+| 회선 추가 | 1,500원/월 |
+
+> 1회선 = 전화번호 1개 = 동시통화 1건. 수신통화는 무료입니다.
+
+### OpenAI (음성 처리)
+
+| 서비스                   | 비용            |
+| ------------------------ | --------------- |
+| 음성 인식 (Realtime STT) | ~$0.006/분      |
+| 음성 합성 (TTS)          | ~$0.015/1K 글자 |
+
+**예상 비용**: 일반적인 1분 통화 기준 ~$0.03 (OpenAI만, ClawOps 통화 요금 별도)
 
 ---
 
