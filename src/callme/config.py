@@ -1,6 +1,8 @@
 """Configuration loading from environment variables."""
+
 from __future__ import annotations
 
+import hashlib
 import os
 from dataclasses import dataclass, field
 
@@ -51,12 +53,19 @@ def load_config() -> Config:
         tts_voice=os.environ.get("CALLME_TTS_VOICE", "onyx"),
         tts_model=os.environ.get("CALLME_TTS_MODEL", "tts-1"),
         stt_model=os.environ.get("CALLME_STT_MODEL", "gpt-4o-transcribe"),
-        stt_silence_duration_ms=int(os.environ.get("CALLME_STT_SILENCE_DURATION_MS", "800")),
-        transcript_timeout_ms=int(os.environ.get("CALLME_TRANSCRIPT_TIMEOUT_MS", "180000")),
+        stt_silence_duration_ms=int(
+            os.environ.get("CALLME_STT_SILENCE_DURATION_MS", "800")
+        ),
+        transcript_timeout_ms=int(
+            os.environ.get("CALLME_TRANSCRIPT_TIMEOUT_MS", "180000")
+        ),
         control_port=int(os.environ.get("CALLME_CONTROL_PORT", "3334")),
-        inbound_enabled=os.environ.get("CALLME_INBOUND_ENABLED", "").lower() in ("true", "1", "yes"),
+        inbound_enabled=os.environ.get("CALLME_INBOUND_ENABLED", "").lower()
+        in ("true", "1", "yes"),
         inbound_workspace_dir=os.environ.get("CALLME_WORKSPACE_DIR", ""),
-        inbound_permission_mode=os.environ.get("CALLME_INBOUND_PERMISSION_MODE", "plan"),
+        inbound_permission_mode=os.environ.get(
+            "CALLME_INBOUND_PERMISSION_MODE", "plan"
+        ),
         inbound_max_calls=int(os.environ.get("CALLME_INBOUND_MAX_CALLS", "1")),
         inbound_whitelist=[
             n.strip()
@@ -69,6 +78,13 @@ def load_config() -> Config:
         ),
     )
     return config
+
+
+def compute_env_hash() -> str:
+    """CALLME_* 환경변수의 해시를 계산한다."""
+    pairs = sorted((k, v) for k, v in os.environ.items() if k.startswith("CALLME_"))
+    raw = "\n".join(f"{k}={v}" for k, v in pairs)
+    return hashlib.sha256(raw.encode()).hexdigest()[:16]
 
 
 def validate_config(config: Config) -> list[str]:

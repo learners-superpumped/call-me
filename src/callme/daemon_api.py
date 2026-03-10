@@ -2,6 +2,7 @@
 
 MCP 서버들이 HTTP로 데몬을 제어한다.
 """
+
 from __future__ import annotations
 
 import asyncio
@@ -13,6 +14,7 @@ from typing import Any, Callable, Awaitable
 from aiohttp import web
 
 from .call_manager import CallConflictError, CallForbiddenError, CallManager
+from .config import compute_env_hash
 
 log = logging.getLogger("callme.api")
 
@@ -29,6 +31,7 @@ class DaemonApi:
         self._on_ref_count_positive = on_ref_count_positive
         self._clients: dict[str, dict[str, Any]] = {}
         self._start_time = time.time()
+        self._env_hash = compute_env_hash()
         self._runner: web.AppRunner | None = None
         self._heartbeat_task: asyncio.Task | None = None
 
@@ -63,11 +66,14 @@ class DaemonApi:
     # ── Handlers ──────────────────────────────────────────────────
 
     async def _handle_status(self, request: web.Request) -> web.Response:
-        return web.json_response({
-            "status": "ok",
-            "uptime": round(time.time() - self._start_time),
-            "connectedClients": len(self._clients),
-        })
+        return web.json_response(
+            {
+                "status": "ok",
+                "uptime": round(time.time() - self._start_time),
+                "connectedClients": len(self._clients),
+                "envHash": self._env_hash,
+            }
+        )
 
     async def _handle_connect(self, request: web.Request) -> web.Response:
         client_id = os.urandom(16).hex()
@@ -121,7 +127,9 @@ class DaemonApi:
 
         try:
             if action == "continue":
-                response = await self._call_manager.continue_call(client_id, call_id, message)
+                response = await self._call_manager.continue_call(
+                    client_id, call_id, message
+                )
                 return web.json_response({"response": response})
             elif action == "speak":
                 await self._call_manager.speak_only(client_id, call_id, message)

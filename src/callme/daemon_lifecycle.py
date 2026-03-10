@@ -1,4 +1,5 @@
 """Daemon lifecycle: spawn, health check, shutdown management."""
+
 from __future__ import annotations
 
 import asyncio
@@ -82,6 +83,7 @@ def _clean_stale_lock() -> None:
         try:
             stat = LOCK_DIR.stat()
             import time
+
             if time.time() - stat.st_mtime > 60:
                 log.info("Cleaning stale lock (older than 60s)")
                 unlock_sync()
@@ -89,21 +91,30 @@ def _clean_stale_lock() -> None:
             pass
 
 
-async def _is_daemon_ready(port: int) -> bool:
+async def _get_daemon_status(port: int) -> dict | None:
+    """Returns daemon status dict, or None if not reachable."""
     import aiohttp
+
     try:
         async with aiohttp.ClientSession() as session:
             async with session.get(
                 f"http://127.0.0.1:{port}/status",
                 timeout=aiohttp.ClientTimeout(total=3),
             ) as resp:
-                return resp.status == 200
+                if resp.status == 200:
+                    return await resp.json(content_type=None)
     except Exception:
-        return False
+        pass
+    return None
+
+
+async def _is_daemon_ready(port: int) -> bool:
+    return await _get_daemon_status(port) is not None
 
 
 async def _wait_for_daemon_ready(port: int) -> None:
     import time
+
     start = time.monotonic()
     while time.monotonic() - start < DAEMON_READY_TIMEOUT_S:
         if await _is_daemon_ready(port):
@@ -117,6 +128,7 @@ def _spawn_daemon_process(project_root: str) -> None:
     log_fd = open(LOG_FILE, "a")
     # Use uv run to auto-resolve dependencies (matches plugin.json)
     import shutil
+
     uv_path = shutil.which("uv")
     if uv_path:
         cmd = [uv_path, "run", "python", "-m", "callme.daemon"]
@@ -132,13 +144,44 @@ def _spawn_daemon_process(project_root: str) -> None:
     )
 
 
+def _stop_daemon(port: int) -> None:
+    """Send SIGTERM to running daemon."""
+    try:
+        pid = int(PID_FILE.read_text().strip())
+        os.kill(pid, signal.SIGTERM)
+        log.info("Sent SIGTERM to daemon (PID %d) for restart", pid)
+        import time
+
+        for _ in range(30):
+            try:
+                os.kill(pid, 0)
+                time.sleep(0.2)
+            except OSError:
+                break
+    except (FileNotFoundError, ValueError, OSError):
+        pass
+    cleanup_pid_file()
+
+
 async def ensure_daemon_running(project_root: str) -> int:
     """Ensure daemon is running. Spawns if needed. Returns control port."""
+    from .config import compute_env_hash
+
     port = int(os.environ.get("CALLME_CONTROL_PORT", str(DEFAULT_CONTROL_PORT)))
 
-    # Fast path: already running
-    if await _is_daemon_ready(port):
-        return port
+    # Fast path: already running — check env hash
+    status = await _get_daemon_status(port)
+    if status is not None:
+        daemon_hash = status.get("envHash", "")
+        current_hash = compute_env_hash()
+        if daemon_hash == current_hash:
+            return port
+        log.info(
+            "Environment changed (hash %s → %s), restarting daemon...",
+            daemon_hash[:8],
+            current_hash[:8],
+        )
+        _stop_daemon(port)
 
     _ensure_dir()
     _clean_stale_lock()
