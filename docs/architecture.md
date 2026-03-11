@@ -54,7 +54,7 @@ Claude Code C ──stdio──► MCP Server C ──┘
 ClawOps → SDK Control WS → CallMe Daemon
         │
         ▼
-화이트리스트 확인 (사용자 번호 자동 허용)
+화이트리스트 확인 (사용자 번호 자동 허용, UNSAFE 모드 시 스킵)
         │
         ▼
 TTS 인사말 재생 (콜드 스타트 지연 커버)
@@ -65,6 +65,15 @@ CALLME_WORKSPACE_DIR에서 Claude CLI 실행
         ▼
 음성 대화 루프 (STT ↔ Claude ↔ TTS)
 ```
+
+### 번호 제한 바이패스
+
+`CALLME_UNSAFE_NO_NUMBER_RESTRICTION=true` 설정 시 아웃바운드/인바운드 번호 제한이 모두 해제됩니다.
+
+- **아웃바운드**: `initiate_call`의 `to` 파라미터로 임의 번호에 발신 가능
+- **인바운드**: 화이트리스트 체크 없이 모든 번호에서 수신 허용
+
+> ⚠️ 이 설정으로 인해 발생하는 요금, 악용, 규제 위반 등 모든 문제는 운영자의 책임입니다.
 
 ### 참고 사항
 

@@ -59,6 +59,14 @@ class CallMeMCPServer:
                                 "type": "string",
                                 "description": "What you want to say to the user. Be natural and conversational.",
                             },
+                            "to": {
+                                "type": "string",
+                                "description": (
+                                    "Phone number to call (e.g. 01012345678). "
+                                    "Only works when CALLME_UNSAFE_NO_NUMBER_RESTRICTION is enabled. "
+                                    "Omit to call the default user number."
+                                ),
+                            },
                         },
                         "required": ["message"],
                     },
@@ -111,7 +119,9 @@ class CallMeMCPServer:
                 await self._ensure_daemon()
 
                 if name == "initiate_call":
-                    result = await self._daemon.initiate_call(arguments["message"])
+                    result = await self._daemon.initiate_call(
+                        arguments["message"], to=arguments.get("to")
+                    )
                     return [TextContent(
                         type="text",
                         text=(

@@ -102,12 +102,13 @@ class DaemonApi:
         body = await request.json()
         client_id = body.get("clientId", "")
         message = body.get("message", "")
+        to = body.get("to") or None
 
         if client_id not in self._clients:
             return web.json_response({"error": "Unknown client"}, status=401)
 
         try:
-            result = await self._call_manager.initiate_call(client_id, message)
+            result = await self._call_manager.initiate_call(client_id, message, to=to)
             return web.json_response(result)
         except CallConflictError as e:
             return web.json_response({"error": str(e)}, status=409)

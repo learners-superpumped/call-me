@@ -88,6 +88,14 @@ class CallManager:
         await self._agent.connect()
         log.info("CallManager started (SDK Agent connected)")
 
+        if self._config.unsafe_no_number_restriction:
+            log.warning(
+                "⚠ CALLME_UNSAFE_NO_NUMBER_RESTRICTION is ON – "
+                "inbound/outbound number restrictions are DISABLED. "
+                "The operator assumes full responsibility for any charges, "
+                "abuse, or regulatory issues."
+            )
+
     async def stop(self) -> None:
         """SDK Agent 연결 해제."""
         # 활성 통화 정리
@@ -108,15 +116,24 @@ class CallManager:
     # ── Outbound (MCP 도구에서 호출) ─────────────────────────────
 
     async def initiate_call(
-        self, client_id: str, message: str
+        self, client_id: str, message: str, to: str | None = None
     ) -> dict[str, str]:
         if self._get_total_active_calls() > 0:
             raise CallConflictError("A call is already in progress")
 
+        dest = self._config.user_phone_number
+        if to:
+            if not self._config.unsafe_no_number_restriction:
+                raise CallForbiddenError(
+                    "Custom destination number requires "
+                    "CALLME_UNSAFE_NO_NUMBER_RESTRICTION=true"
+                )
+            dest = to
+
         self._session.reset()
 
-        log.info("Initiating outbound call to %s", self._config.user_phone_number)
-        call = await self._agent.call(to=self._config.user_phone_number)
+        log.info("Initiating outbound call to %s", dest)
+        call = await self._agent.call(to=dest)
 
         # 미디어 스트림 연결 대기
         await self._session.wait_ready(timeout=30.0)
@@ -209,7 +226,9 @@ class CallManager:
             return
 
         from_number = call.from_number
-        if not self._is_whitelisted(from_number):
+        if not self._config.unsafe_no_number_restriction and not self._is_whitelisted(
+            from_number
+        ):
             log.info("Rejecting inbound call from %s: not whitelisted", from_number)
             await call.hangup()
             return

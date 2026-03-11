@@ -33,6 +33,11 @@ class Config:
     # Daemon
     control_port: int = 3334
 
+    # Safety bypass – when True, outbound/inbound number restrictions are
+    # disabled. The operator assumes full responsibility for any charges,
+    # abuse, or regulatory issues that result from unrestricted calling.
+    unsafe_no_number_restriction: bool = False
+
     # Inbound
     inbound_enabled: bool = False
     inbound_workspace_dir: str = ""
@@ -60,6 +65,10 @@ def load_config() -> Config:
             os.environ.get("CALLME_TRANSCRIPT_TIMEOUT_MS", "180000")
         ),
         control_port=int(os.environ.get("CALLME_CONTROL_PORT", "3334")),
+        unsafe_no_number_restriction=os.environ.get(
+            "CALLME_UNSAFE_NO_NUMBER_RESTRICTION", ""
+        ).lower()
+        in ("true", "1", "yes"),
         inbound_enabled=os.environ.get("CALLME_INBOUND_ENABLED", "").lower()
         in ("true", "1", "yes"),
         inbound_workspace_dir=os.environ.get("CALLME_WORKSPACE_DIR", ""),

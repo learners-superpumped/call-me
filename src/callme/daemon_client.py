@@ -42,12 +42,13 @@ class DaemonClient:
             await self._session.close()
             self._session = None
 
-    async def initiate_call(self, message: str) -> dict[str, str]:
-        return await self._post(
-            "/calls",
-            {"clientId": self._client_id, "message": message},
-            timeout=300,
-        )
+    async def initiate_call(
+        self, message: str, to: str | None = None
+    ) -> dict[str, str]:
+        body: dict[str, str] = {"clientId": self._client_id, "message": message}
+        if to:
+            body["to"] = to
+        return await self._post("/calls", body, timeout=300)
 
     async def continue_call(self, call_id: str, message: str) -> str:
         data = await self._post(
