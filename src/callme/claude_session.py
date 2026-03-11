@@ -68,17 +68,33 @@ class ClaudeSessionManager:
 
         stdout_str = stdout.decode()
         try:
-            result = json.loads(stdout_str)
-            if not self._session_id and result.get("session_id"):
-                self._session_id = result["session_id"]
-                log.info("New session: %s", self._session_id)
-            if result.get("is_error"):
-                raise RuntimeError(f"Claude error: {result.get('result', '')}")
-            return result.get("result", "")
+            parsed = json.loads(stdout_str)
         except json.JSONDecodeError:
             if stdout_str.strip():
                 return stdout_str.strip()
             raise RuntimeError(f"Failed to parse Claude response: {stdout_str[:200]}")
+
+        # --verbose outputs a JSON array of events; find the "result" event
+        if isinstance(parsed, list):
+            result_obj = next(
+                (item for item in parsed if isinstance(item, dict) and item.get("type") == "result"),
+                None,
+            )
+            if result_obj is None:
+                # Fallback: try last dict in the array
+                result_obj = next(
+                    (item for item in reversed(parsed) if isinstance(item, dict)),
+                    {},
+                )
+        else:
+            result_obj = parsed
+
+        if not self._session_id and result_obj.get("session_id"):
+            self._session_id = result_obj["session_id"]
+            log.info("New session: %s", self._session_id)
+        if result_obj.get("is_error"):
+            raise RuntimeError(f"Claude error: {result_obj.get('result', '')}")
+        return result_obj.get("result", "")
 
     def dispose(self) -> None:
         self._disposed = True
