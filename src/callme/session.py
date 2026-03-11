@@ -23,6 +23,7 @@ from clawops.agent._audio import pcm16_to_ulaw, resample_pcm16, ulaw_to_pcm16
 
 from .stt_openai import OpenAIRealtimeSTT
 from .tts_openai import OpenAITTS
+from .recorder import AudioRecorder
 
 if TYPE_CHECKING:
     from clawops.agent._session import CallSession
@@ -60,6 +61,7 @@ class CallMeSession:
         self._call_ready = asyncio.Event()
         self._call_ended = asyncio.Event()
         self._hung_up = False
+        self._recorder: AudioRecorder | None = None
 
     # ── SDK Session Protocol ──────────────────────────────────────
 
@@ -77,6 +79,12 @@ class CallMeSession:
         )
         await self._stt.connect()
         self._call_ready.set()
+        if self._config.recording_enabled:
+            from .daemon_lifecycle import CALLME_DIR
+
+            rec_path = self._config.recording_path or str(CALLME_DIR / "recordings")
+            self._recorder = AudioRecorder(rec_path, call.call_id)
+            self._recorder.start()
         log.info("CallMeSession started for call %s", call.call_id)
 
     async def feed_audio(self, audio: bytes, timestamp: int) -> None:
@@ -85,6 +93,8 @@ class CallMeSession:
             return
         # ulaw 8kHz → PCM16 8kHz → PCM16 24kHz (OpenAI STT 입력)
         pcm16_8k = ulaw_to_pcm16(audio)
+        if self._recorder:
+            self._recorder.write_inbound(pcm16_8k)
         pcm16_24k = resample_pcm16(pcm16_8k, from_rate=8000, to_rate=24000)
         await self._stt.send_audio(pcm16_24k)
 
@@ -94,6 +104,9 @@ class CallMeSession:
         if self._stt:
             self._stt.close()
             self._stt = None
+        if self._recorder:
+            self._recorder.stop()
+            self._recorder = None
         self._call_ended.set()
         log.info("CallMeSession stopped")
 
@@ -112,6 +125,8 @@ class CallMeSession:
 
         pcm16_24k = await self._tts.synthesize(text)
         pcm16_8k = resample_pcm16(pcm16_24k, from_rate=24000, to_rate=8000)
+        if self._recorder:
+            self._recorder.write_outbound(pcm16_8k)
         ulaw = pcm16_to_ulaw(pcm16_8k)
         await _send_ulaw_chunked(self._current_call, ulaw)
 
@@ -132,12 +147,16 @@ class CallMeSession:
                 pcm_chunk = bytes(buffer[:960])
                 del buffer[:960]
                 pcm16_8k = resample_pcm16(pcm_chunk, from_rate=24000, to_rate=8000)
+                if self._recorder:
+                    self._recorder.write_outbound(pcm16_8k)
                 ulaw = pcm16_to_ulaw(pcm16_8k)
                 await _send_ulaw_chunked(self._current_call, ulaw)
 
         # 남은 버퍼 처리
         if buffer and not self._hung_up:
             pcm16_8k = resample_pcm16(bytes(buffer), from_rate=24000, to_rate=8000)
+            if self._recorder:
+                self._recorder.write_outbound(pcm16_8k)
             ulaw = pcm16_to_ulaw(pcm16_8k)
             await _send_ulaw_chunked(self._current_call, ulaw)
 
@@ -182,6 +201,9 @@ class CallMeSession:
 
     def reset(self) -> None:
         """다음 통화를 위해 상태 초기화."""
+        if self._recorder:
+            self._recorder.stop()
+            self._recorder = None
         self._current_call = None
         self._hung_up = False
         self._call_ready.clear()
