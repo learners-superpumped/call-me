@@ -63,13 +63,14 @@
 
 외부에서 ClawOps 번호로 전화하면 Claude가 직접 응답합니다. [상세 설정 →](docs/architecture.md#인바운드-콜-수신-전화)
 
-| 변수                             | 기본값  | 설명                                         |
-| -------------------------------- | ------- | -------------------------------------------- |
-| `CALLME_INBOUND_ENABLED`         | `false` | 인바운드 콜 활성화                           |
-| `CALLME_WORKSPACE_DIR`           | —       | Claude CLI가 실행될 프로젝트 디렉토리 (필수) |
-| `CALLME_INBOUND_WHITELIST`       | —       | 추가 허용 전화번호 (쉼표 구분)               |
-| `CALLME_INBOUND_PERMISSION_MODE` | `plan`  | Claude Code 권한 모드                        |
-| `CALLME_INBOUND_MAX_CALLS`       | `1`     | 최대 동시 인바운드 콜 수                     |
+| 변수                             | 기본값          | 설명                                         |
+| -------------------------------- | --------------- | -------------------------------------------- |
+| `CALLME_INBOUND_ENABLED`         | `false`         | 인바운드 콜 활성화                           |
+| `CALLME_WORKSPACE_DIR`           | —               | Claude CLI가 실행될 프로젝트 디렉토리 (필수) |
+| `CALLME_INBOUND_WHITELIST`       | —               | 추가 허용 전화번호 (쉼표 구분)               |
+| `CALLME_INBOUND_PERMISSION_MODE` | `plan`          | Claude Code 권한 모드                        |
+| `CALLME_INBOUND_MAX_CALLS`       | `1`             | 최대 동시 인바운드 콜 수                     |
+| `CALLME_INBOUND_GREETING`        | `안녕하세요`    | 전화 응답 시 인사 메시지                     |
 
 #### 번호 제한 바이패스 (선택)
 

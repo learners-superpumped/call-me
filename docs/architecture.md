@@ -43,7 +43,7 @@ Claude Code C ──stdio──► MCP Server C ──┘
 | `CALLME_INBOUND_WHITELIST`       | 아니오           | —             | 추가 허용 전화번호 (쉼표 구분)                 |
 | `CALLME_INBOUND_PERMISSION_MODE` | 아니오           | `plan`        | 인바운드 세션의 Claude Code 권한 모드          |
 | `CALLME_INBOUND_MAX_CALLS`       | 아니오           | `1`           | 최대 동시 인바운드 콜 수                       |
-| `CALLME_INBOUND_GREETING`        | 아니오           | 한국어 기본값 | 전화 응답 시 인사 메시지                       |
+| `CALLME_INBOUND_GREETING`        | 아니오           | `안녕하세요`  | 전화 응답 시 인사 메시지                       |
 
 ### 동작 흐름
 
